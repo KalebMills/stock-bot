@@ -90,6 +90,7 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     constructor(options: IServiceOptions) {
         this.concurrency = options.concurrency;
         this.workers = new Map();
+        //@ts-ignore
         this.workerOptions = options.workerOptions; //TODO: fix this type error; makeWorkerOptions should have it's own interface
         this.logger = options.logger;
     }
