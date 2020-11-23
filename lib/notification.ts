@@ -64,5 +64,22 @@ export class DiscordNotification implements INotification {
             resolve();
         });
     }
-    
+}
+
+export class PhonyNotification implements INotification {
+    constructor() {
+
+    }
+
+    initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    notify(msg: string): Promise<void> {
+        return Promise.resolve();
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
+    }
 }
