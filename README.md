@@ -27,3 +27,12 @@ This bot is meant to be ran as a service, as it will continually gather work on 
 Shipped with this project is a `Makefile`, which comes will the needed commands to run the service, compile changes, run tests, etc. 
 
 The flow of getting a feature or bug fix merged in is Github Issue -> PR -> Test -> Merge
+
+### Environment Variables to run the service
+
+| Name | Value | Required | Notes |
+| ---- | ----- | -------- | ----- |
+| `ALPACAS_API_KEY` | string | true | API Key supplied in your Alpacas UI |
+| `ALPACAS_SECRET_KEY` | string | true | Secret Key supplied in your Alpacas UI |
+| `CONFIG_FILE` | string | false | This points to a file in the `conf` folder, it is simply the file name, i.e `dev` |
+| `STOCK_LOG_DIR` | string | false | This is the directory to which the service should write logs to |

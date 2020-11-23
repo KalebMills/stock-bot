@@ -4,3 +4,7 @@
 .PHONY: tsc-only
 tsc-only: 
 	./node_modules/.bin/tsc --project ./tsconfig.json
+
+.PHONY: test-only
+test-only: 
+	npx ./node_modules/.bin/mocha test
