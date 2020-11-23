@@ -11,6 +11,7 @@ const { YahooGainersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange } = require('../lib/exchange');
+const { DiscordNotification } = require('../lib/notification');
 
 const logger = winston.createLogger({
     transports: [
@@ -59,6 +60,12 @@ const exchange = new AlpacasExchange({
     testing: true
 });
 
+const notification = new DiscordNotification({
+    guildId: 'GUILD-ID',
+    logger,
+    token: (process.env['DISCORD_API_TOKEN'] || "")
+});
+
 const serviceOptions = {
     concurrency: 1,
     logger,
@@ -80,7 +87,8 @@ const serviceOptions = {
             unit: 1,
             measurement: "hour"
         }
-    }
+    },
+    notification
 };
 
 module.exports = serviceOptions;
