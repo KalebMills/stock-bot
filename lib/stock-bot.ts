@@ -11,11 +11,12 @@ import * as sheets from 'google-spreadsheet';
 import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
 import color from 'chalk';
+import { INotification } from './notification';
 
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
     exchange: joi.object().instance(AlpacasExchange).required(), //Currently we don't have a base Exchange class 
-
+    notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
     googleSheets: joi.object({
         id: joi.string().required(),
         authPath: joi.string().required()
@@ -50,10 +51,12 @@ export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOpt
     postTransaction: (data: { [key: string]: string | number }) => Promise<void>;
     purchaseOptions: IPurchaseOptions;
     exchange: Exchange<TOrderInput, TOrderInput, TOrder>;
+    notification: INotification;
 }
 
 export interface IStockServiceOptions extends IServiceOptions {
     datasource: IDataSource;
+    notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     googleSheets: {
         id: string;
@@ -85,12 +88,14 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     private purchaseOptions: IPurchaseOptions;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
     datasource: IDataSource;
+    notification: INotification;
 
     constructor(options: IStockServiceOptions) {
         super(options);
         this.options = options;
         this.exchange = options.exchange;
         this.datasource = options.datasource;
+        this.notification = options.notification;
         this.purchaseOptions = options.purchaseOptions;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
     }
@@ -212,7 +217,8 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             exceptionHandler: this.exceptionHandler,
             postTransaction: this.postTransaction,
             purchaseOptions: this.purchaseOptions,
-            exchange: this.exchange
+            exchange: this.exchange,
+            notification: this.notification
         });
     }
 
@@ -237,6 +243,7 @@ export class StockServiceWorker extends Worker<ITickerChange> {
     logger: Logger;
     private postTransaction: (data: {[key: string]: string | number}) => Promise<void>;
     private purchaseOptions: IPurchaseOptions;
+    private notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstract somehow, these type definitions should not be explicitly Alpaca types
 
     constructor(options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
@@ -245,6 +252,7 @@ export class StockServiceWorker extends Worker<ITickerChange> {
         this.postTransaction = options.postTransaction;
         this.purchaseOptions = options.purchaseOptions;
         this.exchange = options.exchange;
+        this.notification = options.notification;
     }
 
     process(ticker: ITickerChange): Promise<void> {
@@ -270,26 +278,7 @@ export class StockServiceWorker extends Worker<ITickerChange> {
                     this.logger.log(LogLevel.INFO, color.green(`Checking buying power.`))
                     const cost = this.purchaseOptions.maxShareCount * this.purchaseOptions.maxSharePrice;
                     if(cost < amount) {
-                        //Purchase
-                        this.logger.log(LogLevel.INFO, color.greenBright(`We have enough buying power, purchasing ${ticker.ticker}`))
-                        return this.exchange.buy({
-                            qty: this.purchaseOptions.maxShareCount,
-                            symbol: ticker.ticker,
-                            take_profit: {
-                                limit_price: takeProfitDollarAmount
-                            },
-                            stop_loss: {
-                                limit_price: stopLossDollarAmount - ( stopLossDollarAmount * .02 ), //Set the stop_price at the value 2% less than stopLossDollarAmount
-                                stop_price: stopLossDollarAmount
-                            },
-                            side: 'buy',
-                            type: 'market',
-                            order_class: 'bracket',
-                            time_in_force: 'day'
-                        })
-                        .then(() => {
-                            this.logger.log(LogLevel.TRACE, `Successfully created an order for ${ticker.ticker} at ${ticker.price}`);
-                        });
+                        return this.notification.notify(`We should purchase ticker ${ticker.ticker}`);
                     } else {
                         this.logger.log(LogLevel.WARN, color.magentaBright(`${this.exchange.constructor.name} does not have enough buy power to purchase the configured amount of shares for ${ticker.ticker}`));
                         return;

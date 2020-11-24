@@ -7,6 +7,6 @@
     "esModuleInterop": true,
     "types": ["@types/mocha"]
   },
-  "include": ["src/*.ts", "test/*.ts", "bin/*.ts"],
+  "include": ["lib/*.ts", "test/*.ts", "bin/*.ts"],
   "exclude": ["node_modules"]
 }

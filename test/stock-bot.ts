@@ -6,6 +6,7 @@ import BPromise from 'bluebird';
 import { AlpacasExchange } from '../lib/exchange';
 import * as joi from 'joi';
 import * as D from '../lib/data-source';
+import * as N from '../lib/notification';
 
 const logger: Logger = winston.createLogger({ transports: [ new winston.transports.Console() ] });
 
@@ -44,6 +45,9 @@ const exchange = new AlpacasExchange({
     },
     testing: true
 });
+
+const notification = new N.PhonyNotification();
+
 const serviceOptions: IStockServiceOptions = {
     concurrency: 1,
     logger,
@@ -52,6 +56,7 @@ const serviceOptions: IStockServiceOptions = {
     },
     datasource,
     exchange,
+    notification,
     googleSheets: {
         id: '1gCdnOWYckCDZh5VTn3FaOasB4h3XXyBneg-gu6yT5Ag',
         authPath: '/home/keys/google-sheets-key.json'
@@ -96,6 +101,7 @@ describe('#StockWorker', () => {
                     unit: 1
                 }
             },
+            notification,
             exchange,
             exceptionHandler: (err: Error) => {},
             postTransaction: (data) => service.postTransaction(data)

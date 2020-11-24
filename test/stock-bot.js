@@ -28,6 +28,7 @@ const assert = __importStar(require("assert"));
 const exchange_1 = require("../lib/exchange");
 const joi = __importStar(require("joi"));
 const D = __importStar(require("../lib/data-source"));
+const N = __importStar(require("../lib/notification"));
 const logger = winston_1.default.createLogger({ transports: [new winston_1.default.transports.Console()] });
 const baseOptions = {
     logger,
@@ -60,6 +61,7 @@ const exchange = new exchange_1.AlpacasExchange({
     },
     testing: true
 });
+const notification = new N.PhonyNotification();
 const serviceOptions = {
     concurrency: 1,
     logger,
@@ -68,6 +70,7 @@ const serviceOptions = {
     },
     datasource,
     exchange,
+    notification,
     googleSheets: {
         id: '1gCdnOWYckCDZh5VTn3FaOasB4h3XXyBneg-gu6yT5Ag',
         authPath: '/home/keys/google-sheets-key.json'
@@ -108,6 +111,7 @@ describe('#StockWorker', () => {
                     unit: 1
                 }
             },
+            notification,
             exchange,
             exceptionHandler: (err) => { },
             postTransaction: (data) => service.postTransaction(data)
