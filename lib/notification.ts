@@ -40,7 +40,7 @@ export class DiscordNotification implements INotification {
         return this.client.login(this.token)
         .then(() => {
             this.logger.log(LogLevel.TRACE, `${this.constructor.name}#initialize():SUCCESS`);
-        })
+        });
     }
 
     notify(message: string): Promise<void> {
@@ -52,10 +52,10 @@ export class DiscordNotification implements INotification {
                     this.logger.log(LogLevel.TRACE, 'Sent message into system channel');
                 });
             } else {
-                this.logger.log(LogLevel.TRACE, 'No system channel specified');
-                return Promise.resolve();
+                this.logger.log(LogLevel.ERROR, 'No system channel specified');
+                throw new Error(`No system channel is specified for the guild ${this.guildId}`);
             }
-        })
+        });
     }
 
     close(): Promise<void> {
