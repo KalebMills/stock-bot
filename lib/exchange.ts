@@ -31,7 +31,7 @@ export interface IAcceptableTrade {
     type: 'percent' | 'dollar';
 }
 
-export class AlpacasExchange extends Alpacas.Client implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
+export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
     logger: Logger;
     private acceptableGain: IAcceptableTrade;
     private acceptableLoss: IAcceptableTrade;
@@ -42,8 +42,7 @@ export class AlpacasExchange extends Alpacas.Client implements Exchange<Alpacas.
                 key: options.keyId,
                 secret: options.secretKey
             },
-            rate_limit: true,
-            paper: options.testing || false
+            rate_limit: true
         });
 
         this.logger = options.logger;
@@ -96,7 +95,7 @@ export class AlpacasExchange extends Alpacas.Client implements Exchange<Alpacas.
 
     getBuyingPower(): Promise<number> {
         return this.getAccount()
-        .then(res => parseInt(res.buying_power));
+        .then(res => res.buying_power);
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
