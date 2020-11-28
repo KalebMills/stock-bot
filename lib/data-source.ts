@@ -8,7 +8,7 @@ import color from 'chalk';
 import BPromise, { reject } from 'bluebird';
 import { generateKeyPairSync } from 'crypto';
 import { number } from 'joi';
-import { polygonClient } from "polygon.io";
+import { PolygonSnapshot } from '../types/polygonSnapshot'
 
 export interface IDataSource extends ICloseable, IInitializable {
     scrapeUrl: string;
@@ -25,68 +25,6 @@ export interface IDataSourceOptions {
     logger: Logger;
 }
 
-
-// will move to its own file, should also maybe just use the polygon.io package with its own api key to make use of the d.ts file
-export interface PolygonSnapshot {
-    status: string;
-    tickers: SnapshotArray[];
-}
-
-export interface SnapshotArray {
-    day: PolygonSnapshotDay
-    lastQuote: PolygonSnapshotLastQuote
-    lastTrade: PolygonSnapshotLastTrade
-    min: PolygonSnapshotMin,
-    prevDay: PolygonSnapshotPrevDay,
-    ticker: string
-    todaysChange: number
-    todaysChangePerc: number
-    updated: number
-}
-
-export interface PolygonSnapshotDay {
-    o: number,
-    h: number,
-    l: number,
-    c: number,
-    v: number,
-    vw: number
-}
-
-export interface PolygonSnapshotLastQuote {
-    P: number,
-    s: number,
-    p: number,
-    S: number,
-    t: number
-}
-
-export interface PolygonSnapshotLastTrade {
-    c: string[],
-    i: number,
-    p: number,
-    s: number,
-    t: number,
-    x: number
-}
-
-export interface PolygonSnapshotMin {
-    av: number,
-    p: number,
-    h: number,
-    l: number,
-    c: number,
-    v: number,
-    vw: number
-}
-export interface PolygonSnapshotPrevDay {
-    o: number,
-    h: number,
-    l: number,
-    c: number,
-    v: number,
-    vw: number
-}
 export abstract class DataSource implements IDataSource {
     readonly scrapeUrl: string;
     readonly validationSchema: joi.Schema;
