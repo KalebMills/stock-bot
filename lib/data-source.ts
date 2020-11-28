@@ -7,6 +7,7 @@ import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
 import BPromise, { reject } from 'bluebird';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
+import { InvalidData } from './exceptions'
 
 export interface IDataSource extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
@@ -133,7 +134,7 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
 
                             this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${ticker} -- Price: ${price} -- Change: ${change}`)                      ;      
                         } catch(err) {
-                            throw new Error(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
+                            throw new InvalidData(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
                         }
 
                         //Where we add or timeout the ticker;
@@ -180,7 +181,8 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
                     }
                 })
             } catch(err) {
-                throw new Error(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
+
+                throw new InvalidData(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
             }
             return tickers
         }))
