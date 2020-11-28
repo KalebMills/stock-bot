@@ -5,7 +5,10 @@ import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
-import BPromise from 'bluebird';
+import BPromise, { reject } from 'bluebird';
+import { generateKeyPairSync } from 'crypto';
+import { number } from 'joi';
+import { polygonClient } from "polygon.io";
 
 export interface IDataSource extends ICloseable, IInitializable {
     scrapeUrl: string;
@@ -22,6 +25,68 @@ export interface IDataSourceOptions {
     logger: Logger;
 }
 
+
+// will move to its own file, should also maybe just use the polygon.io package with its own api key to make use of the d.ts file
+export interface PolygonSnapshot {
+    status: string;
+    tickers: SnapshotArray[];
+}
+
+export interface SnapshotArray {
+    day: PolygonSnapshotDay
+    lastQuote: PolygonSnapshotLastQuote
+    lastTrade: PolygonSnapshotLastTrade
+    min: PolygonSnapshotMin,
+    prevDay: PolygonSnapshotPrevDay,
+    ticker: string
+    todaysChange: number
+    todaysChangePerc: number
+    updated: number
+}
+
+export interface PolygonSnapshotDay {
+    o: number,
+    h: number,
+    l: number,
+    c: number,
+    v: number,
+    vw: number
+}
+
+export interface PolygonSnapshotLastQuote {
+    P: number,
+    s: number,
+    p: number,
+    S: number,
+    t: number
+}
+
+export interface PolygonSnapshotLastTrade {
+    c: string[],
+    i: number,
+    p: number,
+    s: number,
+    t: number,
+    x: number
+}
+
+export interface PolygonSnapshotMin {
+    av: number,
+    p: number,
+    h: number,
+    l: number,
+    c: number,
+    v: number,
+    vw: number
+}
+export interface PolygonSnapshotPrevDay {
+    o: number,
+    h: number,
+    l: number,
+    c: number,
+    v: number,
+    vw: number
+}
 export abstract class DataSource implements IDataSource {
     readonly scrapeUrl: string;
     readonly validationSchema: joi.Schema;
@@ -157,4 +222,40 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
     }
 }
 
+
+export class PolygonGainersDataSource extends DataSource implements IDataSource {
+    constructor(options: IDataSourceOptions) {
+        super(options);
+    }
+
+    scrapeDatasource(): Promise<ITickerChange[]> {
+        return axios.all([axios.get(this.scrapeUrl+'gainers'), axios.get(this.scrapeUrl+'losers')])
+        .then(axios.spread((gainers: AxiosResponse<PolygonSnapshot>, losers: AxiosResponse<PolygonSnapshot>) => {
+            const data: AxiosResponse<PolygonSnapshot>[]= [gainers, losers]
+            return data
+        })).then((data: AxiosResponse<PolygonSnapshot>[]) => {
+            const tickers: ITickerChange[] = [];
+            try {
+                data.forEach(response => {
+                    for(let snapshot of response.data['tickers']) {
+                        let persuasion: "up" | "down" = snapshot.todaysChange > 0 ? "up" : "down";
+                        let percentChange: number = Number(snapshot.todaysChangePerc.toFixed(2))
+                        let stockObj: ITickerChange = {
+                            ticker: snapshot.ticker,
+                            price: snapshot.day.c!,
+                            percentChange: { percentChange, persuasion}
+                        };
+                        this.logger.log(LogLevel.TRACE, `Ticker Scape: ${stockObj.ticker} -- Price: ${stockObj.price} -- Change: ${stockObj.percentChange}`)
+                    }
+                })
+            } catch(err) {
+                throw new Error(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
+            }
+            return tickers
+        })
+        .catch((err) => {
+            throw(err);
+        });
+    }
+}
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all

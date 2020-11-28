@@ -37,13 +37,16 @@ const StockTickerSchema = joi.object({
     })
 }).required();
 
+const _scrapeUrl = process.env['DATA_SOURCE'] == 'Polygon' ? '/v2/snapshot/locale/us/markets/stocks/gainers' : 'https://finance.yahoo.com/gainers';
+const _dataSource = process.env['DATA_SOURCE'] == 'Polygon' ? new PolygonGainersDataSource(datasourceOptions) : new YahooGainersDataSource(datasourceOptions);
+
 const datasourceOptions = {
     logger,
-    scrapeUrl: 'https://finance.yahoo.com/gainers',
+    scrapeUrl: `${_scrapeUrl}`,
     validationSchema: StockTickerSchema
 }
 
-const datasource = new YahooGainersDataSource(datasourceOptions);
+const datasource = _dataSource;
 
 const exchange = new AlpacasExchange({
     logger, 
