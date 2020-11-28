@@ -43,9 +43,7 @@ const datasourceOptions = {
     validationSchema: StockTickerSchema
 }
 
-const _dataSource = process.env['DATA_SOURCE'] == 'Polygon' ? new PolygonGainersLosersDataSource(datasourceOptions) : new YahooGainersDataSource(datasourceOptions);
-
-const datasource = _dataSource;
+const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
 const exchange = new AlpacasExchange({
     logger, 
