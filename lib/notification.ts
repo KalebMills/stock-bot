@@ -2,7 +2,12 @@ import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import * as discord from 'discord.js';
 import * as winston from 'winston';
 
-export interface INotification<T = string> extends IInitializable, ICloseable {
+export interface NotificationOptions {
+    message: string;
+    additionaData: { [key: string]: string | number}
+}
+
+export interface INotification<T = NotificationOptions> extends IInitializable, ICloseable {
     notify(data: T): Promise<void>;
 }
 
@@ -34,6 +39,7 @@ export class DiscordNotification implements INotification {
         }
         this.logger = options.logger;
         this.guildId = options.guildId;
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
     initialize(): Promise<void> {
@@ -43,12 +49,14 @@ export class DiscordNotification implements INotification {
         });
     }
 
-    notify(message: string): Promise<void> {
-        return this.client.guilds.fetch(this.guildId)
+    notify(message: NotificationOptions): Promise<void> {
+        return this.client.guilds.fetch(this.guildId, undefined, true)
         .then(guild => {
             const channel = guild.systemChannel;
+            console.log(`channel: ${channel}`)
             if (channel) {
-                return channel.send(message).then(() => {
+                return channel.send(`
+                \`${message.message}\` \nAdditional Information: \`\`\`json\n${JSON.stringify(message.additionaData)}\`\`\``).then(() => {
                     this.logger.log(LogLevel.TRACE, 'Sent message into system channel');
                 });
             } else {
@@ -75,7 +83,7 @@ export class PhonyNotification implements INotification {
         return Promise.resolve();
     }
 
-    notify(msg: string): Promise<void> {
+    notify(msg: NotificationOptions): Promise<void> {
         return Promise.resolve();
     }
 

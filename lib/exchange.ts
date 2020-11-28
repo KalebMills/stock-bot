@@ -23,7 +23,6 @@ export interface ExchangeOptions {
 interface AlpacasExchangeOptions extends ExchangeOptions {
     keyId: string;
     secretKey: string;
-    testing?: boolean;
 }
 
 export interface IAcceptableTrade {
@@ -31,7 +30,7 @@ export interface IAcceptableTrade {
     type: 'percent' | 'dollar';
 }
 
-export class AlpacasExchange extends Alpacas.Client implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
+export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
     logger: Logger;
     private acceptableGain: IAcceptableTrade;
     private acceptableLoss: IAcceptableTrade;
@@ -42,17 +41,12 @@ export class AlpacasExchange extends Alpacas.Client implements Exchange<Alpacas.
                 key: options.keyId,
                 secret: options.secretKey
             },
-            rate_limit: true,
-            paper: options.testing || false
+            rate_limit: true
         });
 
         this.logger = options.logger;
         this.acceptableGain = options.acceptableGain;
         this.acceptableLoss = options.acceptableLoss;
-
-        if(options.testing) {
-            this.logger.log(LogLevel.INFO, color.bgYellowBright.blackBright(`${this.constructor.name}#constructor - In PAPER mode, no real trades will be executed.`))
-        }
     }
 
     //TODO: Add in the functionality to get data for a ticker, buy, and sell. An exchange may also need a way to keep it's equity value???
@@ -96,7 +90,7 @@ export class AlpacasExchange extends Alpacas.Client implements Exchange<Alpacas.
 
     getBuyingPower(): Promise<number> {
         return this.getAccount()
-        .then(res => parseInt(res.buying_power));
+        .then(res => res.buying_power);
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
