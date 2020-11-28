@@ -101,7 +101,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     }
 
     initialize(): Promise<void> {
-        return Promise.all([ super.initialize(), this.datasource.initialize(), this.exchange.initialize() ])
+        return Promise.all([ super.initialize(), this.datasource.initialize(), this.exchange.initialize(), this.notification.initialize() ])
         .then(() => {
             //TODO: Should make this it's own abstraction, something like 
             let sheet = new sheets.GoogleSpreadsheet(this.options.googleSheets.id);
@@ -199,11 +199,11 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             .catch(err => {
                 this.logger.log(LogLevel.ERROR, `Error caught in preprocess -> ${err}`);
                 throw err;
-            })
+            });
         }
     }
 
-    //TODO: We should make this something like a "Tracker" class, that does this type of generic logging
+    //TODO: This should be in some type of database abstraction
     postTransaction = (data: {[key: string]: string | number}): Promise<void> => {
         let date = momentTimezone().tz('America/Monterrey').format('MM-DD-YYYY');
         let time = momentTimezone().tz('America/Monterrey').format('HH:mm');
@@ -233,7 +233,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     }
     
     close(): Promise<void> {
-        return Promise.all([ this.datasource.close(), this.exchange.close() ])
+        return Promise.all([ this.datasource.close(), this.exchange.close(), this.notification.close() ])
         .then(() => super.close());
     }
 }
@@ -244,7 +244,7 @@ export class StockServiceWorker extends Worker<ITickerChange> {
     private postTransaction: (data: {[key: string]: string | number}) => Promise<void>;
     private purchaseOptions: IPurchaseOptions;
     private notification: INotification;
-    exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstract somehow, these type definitions should not be explicitly Alpaca types
+    exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstract. The Exchange should use a more abstract and simple interface.
 
     constructor(options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
@@ -267,32 +267,33 @@ export class StockServiceWorker extends Worker<ITickerChange> {
 
             this.logger.log(LogLevel.INFO, `Change Percent ${changePercent.percentChange} ${changePercent.persuasion} for ${ticker.ticker}`)
             //TODO: Make the expected percentChange expectation configurable in the service
-            if((changePercent.percentChange >= .0005 && changePercent.persuasion === 'up') && (ticker.price <= this.purchaseOptions.maxSharePrice)) {
-                this.logger.log(LogLevel.INFO, `We should buy ${ticker.ticker} at $${ticker.price}/share, previous price ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago was $${prevStockPrice}/share`);
+            if((changePercent.percentChange >= .005 && changePercent.persuasion === 'up') && (ticker.price <= this.purchaseOptions.maxSharePrice)) {
                 let takeProfitDollarAmount = ticker.price + (ticker.price * this.purchaseOptions.takeProfitPercentage);
                 let stopLossDollarAmount = ticker.price - (ticker.price * this.purchaseOptions.stopLimitPercentage);
-               
+
+                return this.notification.notify({
+                    message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
+                    additionaData: {}
+                });
                 //Lets set our buy here, and our different sell and stop limits with the above price
-                return this.exchange.getBuyingPower()
-                .then(amount => {
-                    this.logger.log(LogLevel.INFO, color.green(`Checking buying power.`))
-                    const cost = this.purchaseOptions.maxShareCount * this.purchaseOptions.maxSharePrice;
-                    if(cost < amount) {
-                        return this.notification.notify(`We should purchase ticker ${ticker.ticker}`);
-                    } else {
-                        this.logger.log(LogLevel.WARN, color.magentaBright(`${this.exchange.constructor.name} does not have enough buy power to purchase the configured amount of shares for ${ticker.ticker}`));
-                        return;
-                    }
-                })
+                // return this.exchange.getBuyingPower()
+                // .then(amount => {
+                //     this.logger.log(LogLevel.INFO, color.green(`Checking buying power.`))
+                //     const cost = this.purchaseOptions.maxShareCount * this.purchaseOptions.maxSharePrice;
+                //     if(cost < amount) {
+                //         return this.notification.notify(`We should purchase ticker ${ticker.ticker}`);
+                //     } else {
+                //         this.logger.log(LogLevel.WARN, color.magentaBright(`${this.exchange.constructor.name} does not have enough buy power to purchase the configured amount of shares for ${ticker.ticker}`));
+                //         return;
+                //     }
+                // })
 
             } else {
-                this.logger.log(LogLevel.TRACE, `Ticker: ${ticker} - Change Percent: ${changePercent} - Price: ${prevStockPrice}`)
+                //no-op
             }
         })
     }
 
-    //This function should also verify that 1, the range is within trading time, and if the range is past it, return most recent price
-    //NOTE: Above is somewhat correct - but this function should not do that check, the caller of the function should do that check, so this method can be indipotent
     //TODO: This needs to be on the Exchange interface, this should not be something that a worker can do by itself.
     getPrevStockPrice(ticker: string, amount: number = 15,  unit: moment.DurationInputArg2 = 'minutes', limit: number = 100): Promise<number> {
         let nycTime = momentTimezone.tz(new Date().getTime(), 'America/New_York').subtract(amount, unit);
@@ -311,13 +312,10 @@ export class StockServiceWorker extends Worker<ITickerChange> {
                 let priceAsNumber = Number(data.data.results[data.data.results_count -1].p);
                 return Number(priceAsNumber.toFixed(2));
             } else {
+                this.logger.log(LogLevel.ERROR, `Failed to get previous price for ${ticker}`)
                 throw new exception.UnprocessableTicker(ticker);
             }
-        })
-        .catch(err => {
-            this.logger.log(LogLevel.ERROR, `Got error in getPrevStockPrice -> ${err}`)
-            throw err;
-        })
+        });
     }
 
     //Here we take the different prices, and come up with the % of change in the stock price
