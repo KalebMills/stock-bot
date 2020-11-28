@@ -23,7 +23,6 @@ export interface ExchangeOptions {
 interface AlpacasExchangeOptions extends ExchangeOptions {
     keyId: string;
     secretKey: string;
-    testing?: boolean;
 }
 
 export interface IAcceptableTrade {
@@ -48,10 +47,6 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
         this.logger = options.logger;
         this.acceptableGain = options.acceptableGain;
         this.acceptableLoss = options.acceptableLoss;
-
-        if(options.testing) {
-            this.logger.log(LogLevel.INFO, color.bgYellowBright.blackBright(`${this.constructor.name}#constructor - In PAPER mode, no real trades will be executed.`))
-        }
     }
 
     //TODO: Add in the functionality to get data for a ticker, buy, and sell. An exchange may also need a way to keep it's equity value???

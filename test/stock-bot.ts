@@ -31,6 +31,7 @@ class FakeDatasource extends D.DataSource {
 
 const datasource = new FakeDatasource(baseOptions);
 
+// TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
 const exchange = new AlpacasExchange({
     logger, 
     keyId: (process.env['ALPACAS_API_KEY'] || ""),
@@ -42,8 +43,7 @@ const exchange = new AlpacasExchange({
     acceptableLoss: {
         unit: 1,
         type: 'percent'
-    },
-    testing: true
+    }
 });
 
 const notification = new N.PhonyNotification();
