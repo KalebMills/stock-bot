@@ -11,7 +11,6 @@ import { number } from 'joi';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
 
 export interface IDataSource extends ICloseable, IInitializable {
-    scrapeUrl: string;
     validationSchema: joi.Schema;
     timedOutTickers: Map<string, U.IDeferredPromise>;
     validateData(input: any): boolean;
@@ -20,20 +19,17 @@ export interface IDataSource extends ICloseable, IInitializable {
 }
 
 export interface IDataSourceOptions {
-    scrapeUrl: string;
     validationSchema: joi.Schema;
     logger: Logger;
 }
 
 export abstract class DataSource implements IDataSource {
-    readonly scrapeUrl: string;
     readonly validationSchema: joi.Schema;
     logger: Logger;
 
     timedOutTickers: Map<string, U.IDeferredPromise>;
 
     constructor(options: IDataSourceOptions) {
-        this.scrapeUrl = options.scrapeUrl;
         this.validationSchema = options.validationSchema;
         this.logger = options.logger;
         this.timedOutTickers = new Map();
@@ -105,7 +101,8 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
-        return axios.get(this.scrapeUrl)
+        const scrapeUrl: string = 'https://finance.yahoo.com/gainers'
+        return axios.get(scrapeUrl)
         .then((data: AxiosResponse) => {
             let html = cheerio.load(data.data);
             const tickers: ITickerChange[] = [];
@@ -136,7 +133,7 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
                             stockObj.percentChange = percentChange;
                             stockObj.ticker = ticker;
 
-                            this.logger.log(LogLevel.TRACE, `Ticker Scape: ${ticker} -- Price: ${price} -- Change: ${change}`)                      ;      
+                            this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${ticker} -- Price: ${price} -- Change: ${change}`)                      ;      
                         } catch(err) {
                             throw new Error(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
                         }
@@ -161,17 +158,15 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
 }
 
 
-export class PolygonGainersDataSource extends DataSource implements IDataSource {
+export class PolygonGainersLosersDataSource extends DataSource implements IDataSource {
     constructor(options: IDataSourceOptions) {
         super(options);
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
-        return axios.all([axios.get(this.scrapeUrl+'gainers'), axios.get(this.scrapeUrl+'losers')])
-        .then(axios.spread((gainers: AxiosResponse<PolygonSnapshot>, losers: AxiosResponse<PolygonSnapshot>) => {
-            const data: AxiosResponse<PolygonSnapshot>[]= [gainers, losers]
-            return data
-        })).then((data: AxiosResponse<PolygonSnapshot>[]) => {
+        const scrapeUrl: string = 'https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers'
+        return Promise.all([axios.get(scrapeUrl+'gainers'), axios.get(scrapeUrl+'losers')])
+        .then(((data: AxiosResponse<PolygonSnapshot>[]) => {
             const tickers: ITickerChange[] = [];
             try {
                 data.forEach(response => {
@@ -183,17 +178,14 @@ export class PolygonGainersDataSource extends DataSource implements IDataSource 
                             price: snapshot.day.c!,
                             percentChange: { percentChange, persuasion}
                         };
-                        this.logger.log(LogLevel.TRACE, `Ticker Scape: ${stockObj.ticker} -- Price: ${stockObj.price} -- Change: ${stockObj.percentChange}`)
+                        this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${stockObj.ticker} -- Price: ${stockObj.price} -- Change: ${stockObj.percentChange}`)
                     }
                 })
             } catch(err) {
                 throw new Error(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
             }
             return tickers
-        })
-        .catch((err) => {
-            throw(err);
-        });
+        }))
     }
 }
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all

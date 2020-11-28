@@ -11,7 +11,8 @@ const { YahooGainersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange } = require('../lib/exchange');
-const { DiscordNotification } = require('../lib/notification');
+const { DiscordNotification, PhonyNotification } = require('../lib/notification');
+require('dotenv').config()
 
 const logger = winston.createLogger({
     transports: [
@@ -37,14 +38,12 @@ const StockTickerSchema = joi.object({
     })
 }).required();
 
-const _scrapeUrl = process.env['DATA_SOURCE'] == 'Polygon' ? '/v2/snapshot/locale/us/markets/stocks/gainers' : 'https://finance.yahoo.com/gainers';
-const _dataSource = process.env['DATA_SOURCE'] == 'Polygon' ? new PolygonGainersDataSource(datasourceOptions) : new YahooGainersDataSource(datasourceOptions);
-
 const datasourceOptions = {
     logger,
-    scrapeUrl: `${_scrapeUrl}`,
     validationSchema: StockTickerSchema
 }
+
+const _dataSource = process.env['DATA_SOURCE'] == 'Polygon' ? new PolygonGainersLosersDataSource(datasourceOptions) : new YahooGainersDataSource(datasourceOptions);
 
 const datasource = _dataSource;
 
@@ -63,7 +62,7 @@ const exchange = new AlpacasExchange({
     testing: true
 });
 
-const notification = new DiscordNotification({
+const notification = new PhonyNotification({
     guildId: 'GUILD-ID',
     logger,
     token: (process.env['DISCORD_API_TOKEN'] || "")

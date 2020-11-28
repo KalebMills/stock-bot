@@ -12,7 +12,6 @@ const logger: Logger = winston.createLogger({ transports: [ new winston.transpor
 
 const baseOptions: D.IDataSourceOptions = {
     logger,
-    scrapeUrl: '',
     validationSchema: joi.object({
         ticker: joi.string().required(),
         price: joi.number().required()

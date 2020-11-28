@@ -32,7 +32,6 @@ const N = __importStar(require("../lib/notification"));
 const logger = winston_1.default.createLogger({ transports: [new winston_1.default.transports.Console()] });
 const baseOptions = {
     logger,
-    scrapeUrl: '',
     validationSchema: joi.object({
         ticker: joi.string().required(),
         price: joi.number().required()
