@@ -6,8 +6,6 @@ import * as cheerio from 'cheerio';
 import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
 import BPromise, { reject } from 'bluebird';
-import { generateKeyPairSync } from 'crypto';
-import { number } from 'joi';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
 
 export interface IDataSource extends ICloseable, IInitializable {
