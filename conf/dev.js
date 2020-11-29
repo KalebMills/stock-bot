@@ -7,12 +7,11 @@
 // import * as joi from 'joi';
 
 const joi = require('joi');
-const { YahooGainersDataSource } = require('../lib/data-source');
+const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange } = require('../lib/exchange');
 const { DiscordNotification, PhonyNotification } = require('../lib/notification');
-require('dotenv').config()
 
 const logger = winston.createLogger({
     transports: [

@@ -95,13 +95,14 @@ export abstract class DataSource implements IDataSource {
 
 
 export class YahooGainersDataSource extends DataSource implements IDataSource {
+    scrapeUrl: string;
     constructor(options: IDataSourceOptions) {
         super(options);
+        this.scrapeUrl = 'https://finance.yahoo.com/gainers'
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
-        const scrapeUrl: string = 'https://finance.yahoo.com/gainers'
-        return axios.get(scrapeUrl)
+        return axios.get(this.scrapeUrl)
         .then((data: AxiosResponse) => {
             let html = cheerio.load(data.data);
             const tickers: ITickerChange[] = [];
@@ -158,13 +159,14 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
 
 
 export class PolygonGainersLosersDataSource extends DataSource implements IDataSource {
+    scrapeUrl: string;
     constructor(options: IDataSourceOptions) {
         super(options);
+        this.scrapeUrl='https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers'
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
-        const scrapeUrl: string = 'https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers'
-        return Promise.all([axios.get(scrapeUrl+'gainers'), axios.get(scrapeUrl+'losers')])
+        return Promise.all([axios.get(this.scrapeUrl+'gainers'), axios.get(this.scrapeUrl+'losers')])
         .then(((data: AxiosResponse<PolygonSnapshot>[]) => {
             const tickers: ITickerChange[] = [];
             try {
