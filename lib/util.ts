@@ -1,4 +1,3 @@
-import { URL } from 'url'
 export interface IDeferredPromise {
     resolve: Function;
     reject: Function;
@@ -28,11 +27,4 @@ export const createDeferredPromise = (pendingPromise: Promise<any>): IDeferredPr
     deferredPromise.promise = p;
 
     return deferredPromise;
-}
-
-export const constructUrl = (base: string, path: string): string => {
-    let apiKey = process.env['ALPACAS_API_KEY'] || ""
-    let url = new URL(path, base)
-    url.searchParams.append("apiKey", apiKey)
-    return url.toString();
 }

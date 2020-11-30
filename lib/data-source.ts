@@ -8,6 +8,7 @@ import color from 'chalk';
 import BPromise, { reject } from 'bluebird';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
 import { InvalidDataError } from './exceptions'
+import { URL } from 'url'
 
 export interface IDataSource extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
@@ -168,7 +169,7 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
-        return Promise.all([axios.get(U.constructUrl('/gainers', this.scrapeUrl)), axios.get(U.constructUrl('/losers', this.scrapeUrl))])
+        return Promise.all([axios.get(this.constructPolygonUrl('/gainers', this.scrapeUrl)), axios.get(this.constructPolygonUrl('/losers', this.scrapeUrl))])
         .then(((data: AxiosResponse<PolygonSnapshot>[]) => {
             const tickers: ITickerChange[] = [];
             try {
@@ -181,15 +182,22 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
                             price: snapshot.day.c!,
                             percentChange: { percentChange, persuasion}
                         };
+                        tickers.push(stockObj)
                         this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${stockObj.ticker} -- Price: ${stockObj.price} -- Change: ${stockObj.percentChange}`)
                     }
                 })
             } catch(err) {
-
                 throw new InvalidDataError(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
             }
             return tickers
         }))
+    }
+
+    constructPolygonUrl = (base: string, path: string): string => {
+        let apiKey = process.env['ALPACAS_API_KEY'] || ""
+        let url = new URL(path, base)
+        url.searchParams.append("apiKey", apiKey)
+        return url.toString();
     }
 }
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
