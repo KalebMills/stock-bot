@@ -29,7 +29,7 @@ const exceptions_1 = require("../lib/exceptions");
 const uuid = __importStar(require("uuid"));
 const winston_1 = __importDefault(require("winston"));
 const CONSTRUCT_DOCKER_REDIS = () => util_1.runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
-const DESTORY_DOCER_REDIS = () => util_1.runCmd('docker rm -f TEST_REDIS_DB');
+const DESTORY_DOCKER_REDIS = () => util_1.runCmd('docker rm -f TEST_REDIS_DB');
 describe('#MemoryDataStore', () => {
     const TEST_KEY = 'TEST_KEY';
     const TEST_DATA = {
@@ -76,7 +76,7 @@ describe('#RedisDataStore', () => {
     };
     if (!util_1.inCI()) {
         before(() => CONSTRUCT_DOCKER_REDIS());
-        after(() => DESTORY_DOCER_REDIS());
+        after(() => DESTORY_DOCKER_REDIS());
     }
     // Keeps is test suite from running in the test pipeline
     beforeEach(function () {

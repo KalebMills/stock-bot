@@ -6,7 +6,7 @@ import * as uuid from 'uuid';
 import winston from 'winston';
 
 const CONSTRUCT_DOCKER_REDIS = () => runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
-const DESTORY_DOCER_REDIS = () => runCmd('docker rm -f TEST_REDIS_DB');
+const DESTORY_DOCKER_REDIS = () => runCmd('docker rm -f TEST_REDIS_DB');
 
 
 
@@ -65,7 +65,7 @@ describe('#RedisDataStore', () => {
 
     if (!inCI()) {
         before(() => CONSTRUCT_DOCKER_REDIS());
-        after(() => DESTORY_DOCER_REDIS());
+        after(() => DESTORY_DOCKER_REDIS());
     }
 
     // Keeps is test suite from running in the test pipeline
