@@ -7,7 +7,7 @@ import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
 import BPromise, { reject } from 'bluebird';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
-import { InvalidData } from './exceptions'
+import { InvalidDataError } from './exceptions'
 
 export interface IDataSource extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
@@ -135,7 +135,7 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
 
                             this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${ticker} -- Price: ${price} -- Change: ${change}`)                      ;      
                         } catch(err) {
-                            throw new InvalidData(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
+                            throw new InvalidDataError(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
                         }
 
                         //Where we add or timeout the ticker;
@@ -160,13 +160,15 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
 
 export class PolygonGainersLosersDataSource extends DataSource implements IDataSource {
     scrapeUrl: string;
+    apiKey: string;
     constructor(options: IDataSourceOptions) {
         super(options);
-        this.scrapeUrl='https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers'
+        this.scrapeUrl='https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/'
+        this.apiKey=process.env['ALPACAS_API_KEY'] || ""
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
-        return Promise.all([axios.get(this.scrapeUrl+'gainers'), axios.get(this.scrapeUrl+'losers')])
+        return Promise.all([axios.get(U.constructUrl('/gainers', this.scrapeUrl)), axios.get(U.constructUrl('/losers', this.scrapeUrl))])
         .then(((data: AxiosResponse<PolygonSnapshot>[]) => {
             const tickers: ITickerChange[] = [];
             try {
@@ -184,7 +186,7 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
                 })
             } catch(err) {
 
-                throw new InvalidData(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
+                throw new InvalidDataError(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
             }
             return tickers
         }))
