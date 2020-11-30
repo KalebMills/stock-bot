@@ -193,7 +193,7 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
         }))
     }
 
-    constructPolygonUrl = (base: string, path: string): string => {
+    constructPolygonUrl = (path: string, base: string): string => {
         let apiKey = process.env['ALPACAS_API_KEY'] || ""
         let url = new URL(path, base)
         url.searchParams.append("apiKey", apiKey)
