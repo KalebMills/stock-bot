@@ -7,7 +7,7 @@
     "lib": "lib"
   },
   "scripts": {
-    "start": "node ./bin/stock-bot.js",
+    "start": "node -r dotenv/config ./bin/stock-bot.js",
     "test": "node_modules/.bin/mocha",
     "build": "./node_modules/.bin/tsc --project ./tsconfig.json"
   },

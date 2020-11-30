@@ -16,3 +16,12 @@ export class UnrecoverableWorkerError extends Error {
         this.name = this.constructor.name;
     }
 }
+
+export class InvalidDataError extends Error {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, InvalidDataError.prototype);
+        this.message = message || '';
+        this.name = this.constructor.name;
+    }
+}

@@ -29,7 +29,6 @@ describe('#DataSource abstract class', () => {
     it('Can create a base DataSource class', () => {
         const baseOptions: D.IDataSourceOptions = {
             logger,
-            scrapeUrl: '',
             validationSchema: joi.object({
                 ticker: joi.string().required(),
                 price: joi.number().required()

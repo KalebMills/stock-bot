@@ -7,11 +7,11 @@
 // import * as joi from 'joi';
 
 const joi = require('joi');
-const { YahooGainersDataSource } = require('../lib/data-source');
+const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange } = require('../lib/exchange');
-const { DiscordNotification } = require('../lib/notification');
+const { DiscordNotification, PhonyNotification } = require('../lib/notification');
 
 const logger = winston.createLogger({
     transports: [
@@ -39,11 +39,10 @@ const StockTickerSchema = joi.object({
 
 const datasourceOptions = {
     logger,
-    scrapeUrl: 'https://finance.yahoo.com/gainers',
     validationSchema: StockTickerSchema
 }
 
-const datasource = new YahooGainersDataSource(datasourceOptions);
+const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
 const exchange = new AlpacasExchange({
     logger, 
@@ -60,7 +59,7 @@ const exchange = new AlpacasExchange({
     testing: true
 });
 
-const notification = new DiscordNotification({
+const notification = new PhonyNotification({
     guildId: 'GUILD-ID',
     logger,
     token: (process.env['DISCORD_API_TOKEN'] || "")

@@ -1,4 +1,3 @@
-
 export interface IDeferredPromise {
     resolve: Function;
     reject: Function;
