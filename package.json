@@ -1,8 +1,8 @@
 {
   "name": "stock-bot",
   "version": "1.0.0",
-  "description": "1. A stock must have increased by 5% over the last 20 minutes 2. The only stocks that can be traded will be specified in a file that is reloaded every \"tick\" (i.e everytime this \"script\" will run) 3. A stock can never be sold for less than the price it was bought for 4. A stock should be sold once it has  1. Bypassed 15% increase, but has dropped past that (i.e a stock increased 35%, but today has lost 22% of that gain from yesterday). 2. We have passed 50% gains.",
-  "main": "index.js",
+  "description": "",
+  "main": "./bin/stock-bot.js",
   "directories": {
     "lib": "lib"
   },
@@ -25,6 +25,7 @@
     "discord.js": "^12.5.0",
     "dotenv": "^8.2.0",
     "google-spreadsheet": "^3.0.11",
+    "ioredis": "^4.19.2",
     "joi": "^17.2.1",
     "js-yaml": "^3.14.0",
     "mocha": "^8.0.1",
@@ -41,6 +42,7 @@
     "@types/chalk": "^2.2.0",
     "@types/cheerio": "^0.22.18",
     "@types/google-spreadsheet": "^3.0.0",
+    "@types/ioredis": "^4.17.8",
     "@types/jest": "^26.0.4",
     "@types/js-yaml": "^3.12.5",
     "@types/mocha": "^7.0.2",
