@@ -1,4 +1,5 @@
-import { StockService, StockServiceWorker, IStockServiceOptions, ITickerChange } from '../lib/stock-bot';
+import { StockService, IStockServiceOptions, ITickerChange } from '../lib/stock-bot';
+import { TopGainerNotificationStockWorker } from '../lib/workers';
 import winston from 'winston';
 import { Logger } from '../lib/base';
 import * as assert from 'assert';
@@ -56,6 +57,8 @@ const serviceOptions: IStockServiceOptions = {
     datasource,
     exchange,
     notification,
+    //@ts-ignore
+    mainWorker: TopGainerNotificationStockWorker,
     googleSheets: {
         id: '1gCdnOWYckCDZh5VTn3FaOasB4h3XXyBneg-gu6yT5Ag',
         authPath: '/home/keys/google-sheets-key.json'
@@ -72,7 +75,7 @@ const serviceOptions: IStockServiceOptions = {
     }
 }
 let service: StockService;
-let worker: StockServiceWorker;
+let worker: TopGainerNotificationStockWorker;
 
 
 describe('#StockService', () => {
@@ -85,7 +88,7 @@ describe('#StockService', () => {
 
 describe('#StockWorker', () => {
     it('Can create a StockServiceWorker instance', () => {
-        worker = new StockServiceWorker({
+        worker = new TopGainerNotificationStockWorker({
             _preProcessor: () => service.preProcess(),
             id: 'TEST',
             logger,
@@ -105,7 +108,7 @@ describe('#StockWorker', () => {
             exceptionHandler: (err: Error) => {},
             postTransaction: (data) => service.postTransaction(data)
         });
-        assert.strictEqual(worker instanceof StockServiceWorker, true);
+        assert.strictEqual(worker instanceof TopGainerNotificationStockWorker, true);
     });
 
     it('getChangePercent() can accurately return a percentage of change, as well as the persuasion', () => {
