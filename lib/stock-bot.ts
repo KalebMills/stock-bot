@@ -273,7 +273,11 @@ export class StockServiceWorker extends Worker<ITickerChange> {
 
                 return this.notification.notify({
                     message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
-                    additionaData: {}
+                    additionaData: {
+                        exchange: this.exchange.constructor.name,
+                        receiveTime: new Date().toISOString()
+                        //TODO: We should definitely include a way to denote which datasource this information is coming from
+                    }
                 });
                 //Lets set our buy here, and our different sell and stop limits with the above price
                 // return this.exchange.getBuyingPower()

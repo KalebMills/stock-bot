@@ -9,6 +9,7 @@ import BPromise, { reject } from 'bluebird';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
 import { InvalidDataError } from './exceptions'
 import { URL } from 'url'
+import * as p from 'path';
 
 export interface IDataSource extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
@@ -164,8 +165,8 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
     apiKey: string;
     constructor(options: IDataSourceOptions) {
         super(options);
-        this.scrapeUrl='https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/'
-        this.apiKey=process.env['ALPACAS_API_KEY'] || ""
+        this.scrapeUrl = 'https://api.polygon.io/v2/snapshot/locale/us/markets/stocks';
+        this.apiKey = process.env['ALPACAS_API_KEY'] || "";
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
@@ -194,9 +195,10 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
     }
 
     constructPolygonUrl = (path: string, base: string): string => {
-        let apiKey = process.env['ALPACAS_API_KEY'] || ""
-        let url = new URL(path, base)
-        url.searchParams.append("apiKey", apiKey)
+        let apiKey = process.env['ALPACAS_API_KEY'] || "";
+        let baseUrl = p.join(base, path);
+        let url = new URL(baseUrl);
+        url.searchParams.append("apiKey", apiKey);
         return url.toString();
     }
 }
