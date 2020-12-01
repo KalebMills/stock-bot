@@ -35,4 +35,13 @@ export class NotFoundError extends DefaultError {
     }
 }
 
+export class InvalidDataError extends Error {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, InvalidDataError.prototype);
+        this.message = message || '';
+        this.name = this.constructor.name;
+    }
+}
+
 export const isErrorType = (err: DefaultError, expected: string): boolean => err.name === expected;

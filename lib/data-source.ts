@@ -5,10 +5,12 @@ import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
-import BPromise from 'bluebird';
+import BPromise, { reject } from 'bluebird';
+import { PolygonSnapshot } from '../types/polygonSnapshot'
+import { InvalidDataError } from './exceptions'
+import { URL } from 'url'
 
 export interface IDataSource extends ICloseable, IInitializable {
-    scrapeUrl: string;
     validationSchema: joi.Schema;
     timedOutTickers: Map<string, U.IDeferredPromise>;
     validateData(input: any): boolean;
@@ -17,20 +19,17 @@ export interface IDataSource extends ICloseable, IInitializable {
 }
 
 export interface IDataSourceOptions {
-    scrapeUrl: string;
     validationSchema: joi.Schema;
     logger: Logger;
 }
 
 export abstract class DataSource implements IDataSource {
-    readonly scrapeUrl: string;
     readonly validationSchema: joi.Schema;
     logger: Logger;
 
     timedOutTickers: Map<string, U.IDeferredPromise>;
 
     constructor(options: IDataSourceOptions) {
-        this.scrapeUrl = options.scrapeUrl;
         this.validationSchema = options.validationSchema;
         this.logger = options.logger;
         this.timedOutTickers = new Map();
@@ -97,8 +96,10 @@ export abstract class DataSource implements IDataSource {
 
 
 export class YahooGainersDataSource extends DataSource implements IDataSource {
+    scrapeUrl: string;
     constructor(options: IDataSourceOptions) {
         super(options);
+        this.scrapeUrl = 'https://finance.yahoo.com/gainers'
     }
 
     scrapeDatasource(): Promise<ITickerChange[]> {
@@ -133,9 +134,9 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
                             stockObj.percentChange = percentChange;
                             stockObj.ticker = ticker;
 
-                            this.logger.log(LogLevel.TRACE, `Ticker Scape: ${ticker} -- Price: ${price} -- Change: ${change}`)                      ;      
+                            this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${ticker} -- Price: ${price} -- Change: ${change}`)                      ;      
                         } catch(err) {
-                            throw new Error(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
+                            throw new InvalidDataError(`Error in ${this.constructor.name}._fetchHighIncreasedTickers(): innerError: ${err} -- ${JSON.stringify(err)}`);
                         }
 
                         //Where we add or timeout the ticker;
@@ -157,4 +158,46 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
     }
 }
 
+
+export class PolygonGainersLosersDataSource extends DataSource implements IDataSource {
+    scrapeUrl: string;
+    apiKey: string;
+    constructor(options: IDataSourceOptions) {
+        super(options);
+        this.scrapeUrl='https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/'
+        this.apiKey=process.env['ALPACAS_API_KEY'] || ""
+    }
+
+    scrapeDatasource(): Promise<ITickerChange[]> {
+        return Promise.all([axios.get(this.constructPolygonUrl('/gainers', this.scrapeUrl)), axios.get(this.constructPolygonUrl('/losers', this.scrapeUrl))])
+        .then(((data: AxiosResponse<PolygonSnapshot>[]) => {
+            const tickers: ITickerChange[] = [];
+            try {
+                data.forEach(response => {
+                    for(let snapshot of response.data['tickers']) {
+                        let persuasion: "up" | "down" = snapshot.todaysChange > 0 ? "up" : "down";
+                        let percentChange: number = Number(snapshot.todaysChangePerc.toFixed(2))
+                        let stockObj: ITickerChange = {
+                            ticker: snapshot.ticker,
+                            price: snapshot.day.c!,
+                            percentChange: { percentChange, persuasion}
+                        };
+                        tickers.push(stockObj)
+                        this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${stockObj.ticker} -- Price: ${stockObj.price} -- Change: ${stockObj.percentChange}`)
+                    }
+                })
+            } catch(err) {
+                throw new InvalidDataError(`Error in ${this.constructor.name}.scrapeDatasource(): innerError: ${err} -- ${JSON.stringify(err)}`);
+            }
+            return tickers
+        }))
+    }
+
+    constructPolygonUrl = (path: string, base: string): string => {
+        let apiKey = process.env['ALPACAS_API_KEY'] || ""
+        let url = new URL(path, base)
+        url.searchParams.append("apiKey", apiKey)
+        return url.toString();
+    }
+}
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all

@@ -48,11 +48,11 @@ export class RedisDataStore implements IDataStore {
 
     get(data: string): Promise<DataStoreObject> {//Single ID
         return new Promise<DataStoreObject>((resolve, reject) => {
-            this.client.hgetall(data, (err, data) => {
+            this.client.hgetall(data, (err: Error | null, data: DataStoreObject) => {
                 if (err) {
                     reject(err);
                 } else {
-                    resolve(data as DataStoreObject);
+                    resolve(data);
                 }
             })
         });
