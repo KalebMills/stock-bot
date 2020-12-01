@@ -1,16 +1,8 @@
-// import { StockService } from '../lib/stock-bot';
-// import { AlpacasExchange } from '../lib/exchange';
-// import * as winston from 'winston';
-// import * as path from 'path';
-// import color from 'chalk';
-// import { YahooGainersDataSource } from '../lib/data-source';
-// import * as joi from 'joi';
-
 const joi = require('joi');
 const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
-const { AlpacasExchange } = require('../lib/exchange');
+const { PhonyExchange } = require('../lib/exchange');
 const { DiscordNotification, PhonyNotification } = require('../lib/notification');
 
 const logger = winston.createLogger({
@@ -44,20 +36,7 @@ const datasourceOptions = {
 
 const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
-const exchange = new AlpacasExchange({
-    logger, 
-    keyId: (process.env['ALPACAS_API_KEY'] || ""),
-    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
-    acceptableGain: {
-        unit: 1,
-        type: 'percent'
-    },
-    acceptableLoss: {
-        unit: 2,
-        type: 'percent'
-    },
-    testing: true
-});
+const exchange = new PhonyExchange();
 
 const notification = new PhonyNotification({
     guildId: 'GUILD-ID',

@@ -110,3 +110,50 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
         .then(() => {})
     }
 }
+
+export interface PhonyExchangeOptions {
+    logger: Logger;
+    tickers?: { [key: string]: number } //To be used as a map for when calling getBuyingPower()
+}
+
+export class PhonyExchange implements Exchange<string, string, string> {
+    tickers: { [key: string]: number };
+    logger: Logger;
+    
+    constructor(options: PhonyExchangeOptions) {
+        this.logger = options.logger;
+        this.tickers = options.tickers || {};
+    }
+
+    initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    buy(something: string): Promise<string> {
+        return Promise.resolve("");
+    }
+
+    getBuyingPower(): Promise<number> {
+        return Promise.resolve(99999999999999999999);
+    }
+
+    getPriceByTicker(ticker: string): Promise<number> {
+        if (this.tickers.hasOwnProperty(ticker)) {
+            return Promise.resolve(this.tickers[ticker]);
+        } else {
+            return Promise.resolve(200);
+        }
+    }
+
+    isMarketTime(): Promise<boolean> {
+        return Promise.resolve(true);
+    }
+
+    sell(something: string): Promise<string> {
+        return Promise.resolve("");
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
+    }
+}
