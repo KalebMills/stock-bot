@@ -6,6 +6,10 @@ import * as cheerio from 'cheerio';
 import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
 import BPromise from 'bluebird';
+import * as Alpacas from '@master-chief/alpaca';
+import * as ws from 'websocket';
+import WebSocket from 'ws';
+import { EventEmitter } from 'events';
 
 export interface IDataSource extends ICloseable, IInitializable {
     scrapeUrl: string;
@@ -157,4 +161,119 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
     }
 }
 
+export interface TickerStreamDataSourceOptions {
+    tickers: string[];
+}
+
+export class TickerStreamDataSource extends Alpacas.AlpacaStream implements IInitializable, ICloseable {
+    private readonly tickers: string[];
+    
+    constructor(options: TickerStreamDataSourceOptions) {
+        super({
+            credentials: {
+                key: (process.env['ALPACAS_API_KEY'] || ""),
+                secret: (process.env['ALPACAS_SECRET_KEY'] || "")
+            },
+            stream: "market_data"
+        });
+
+        this.tickers = options.tickers;
+    }
+
+    initialize(): Promise<void> {
+        return new Promise((resolve) => {
+            this.on('authenticated', () => {
+                this.subscribe(this.tickers);
+                resolve();
+            })
+        });
+    }
+
+    listen() {
+        this.on('quote', (quote) => {
+            console.log(JSON.stringify(quote));
+        })
+    }
+
+    close(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.unsubscribe(this.tickers);
+            this.on('close', () => resolve());
+        });
+    }
+}
+
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
+
+// const p = new TickerStreamDataSource({
+//     tickers: ['Q.TSLA', 'Q.RCL']
+// });
+
+// p.initialize()
+// .then(() => {
+//     p.listen()
+// })
+
+
+let socket = new WebSocket("wss://socket.polygon.io/stocks");
+
+let emitter = new EventEmitter();
+
+const tickers = ['Q.TSLA', 'Q.NIO', 'Q.RCL', 'Q.CRSR', 'Q.RWT', 'Q.MITT', 'Q.OPK', 'Q.BNS', 'Q.RY', 'Q.GPOR', 'Q.DGX', 'Q.AAL',
+'Q.AACQ', 'Q.AAME', 'Q.AAOI', 'Q.AAPL', 'Q.AAWW', 'Q.AAXJ', 'Q.AAXN', 'Q.ABCB', 'Q.ABCM', 'Q.ABEO', 'Q.ABIO', 'Q.ABMD', 'Q.ABST',
+'Q.ABTX', 'Q.ABUS', 'Q.EUFN', 'Q.EVBG', 'Q.EVER', 'Q.EVGBC', 'Q.EVK', 'Q.EVOL', 'Q.EVOP', 'Q.EXAS', 'Q.EXC', 'Q.EXPD', 'Q.EXPE',
+'Q.FRGI', 'Q.FSFG', 'Q.FSLR', 'Q.FSV', 'Q.FSTX', 'Q.FROG', 'Q.FREEW', 'Q.FRLN', 'Q.GLUU', 'Q.GMAB', 'Q.GLDD', 'Q.GRBK', 'Q.GROW',
+'Q.GRVY', 'Q.LIND', 'Q.LI', 'Q.LIVK', 'Q.LIXTW', 'Q.LMB', 'Q.LMAT', 'Q.LNT', 'Q.LOOP', 'Q.LOGC', 'Q.LOCO', 'Q.LMNL', 'Q.MERC',
+'Q.MESA', 'Q.MESO', 'Q.MFH', 'Q.MFIN'
+]
+
+socket.on('message', (data: any) => {
+    data = JSON.parse(data)
+    data = JSON.parse(JSON.stringify(data[0]))
+    console.log(`MESSAGE: ${JSON.stringify(data)}`);
+    console.log(`Event: ${data.ev}`);
+    console.log(`Status: ${data.status}`)
+    switch(data.ev) {
+        case "status":
+            //AUTHENTICATE
+            switch(data.status) {
+                case 'connected':
+                    console.log('Connected');
+                    emitter.emit('connected', emitter);
+                    break;
+                case 'auth_success':
+                    emitter.emit('authenticated', emitter);
+                    break;
+                default: 
+                    console.log('Unknown status type');
+                    break;
+            }
+            break;
+
+        case "Q":
+            console.log(JSON.stringify(data));
+            break;
+
+        default:
+            console.log('Reached default case');
+            break;
+    }
+});
+
+emitter.on('connected', () => {
+    socket.send(JSON.stringify({
+        "action": "auth",
+        "params": process.env['ALPACAS_API_KEY']
+    }))
+})
+
+emitter.on('authenticated', () => {
+    console.log(`Emitter received authenticated`)
+    let t = ''
+    tickers.forEach(ticker => t.concat(`${ticker},`));
+    t = t.substring(0, t.length - 1)
+    socket.send(JSON.stringify({
+        "action": "subscribe",
+        "params": `${tickers}`
+    }));
+});

@@ -61,7 +61,7 @@ const exchange = new AlpacasExchange({
 });
 
 const notification = new DiscordNotification({
-    guildId: 'GUILD-ID',
+    guildId: '779466034192056350',
     logger,
     token: (process.env['DISCORD_API_TOKEN'] || "")
 });
@@ -75,7 +75,7 @@ const serviceOptions = {
     datasource,
     exchange,
     googleSheets: {
-        id: 'ID',
+        id: '1gCdnOWYckCDZh5VTn3FaOasB4h3XXyBneg-gu6yT5Ag',
         authPath: '/home/keys/google-sheets-key.json'
     },
     purchaseOptions: {
