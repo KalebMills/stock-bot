@@ -1,7 +1,7 @@
 import { Service, Worker, IServiceOptions, IWorker, IWorkerOptions, LogLevel, Logger, promiseRetry } from './base';
 import BPromise from 'bluebird';
 import axios, { AxiosResponse } from 'axios';
-import { Exchange } from './exchange';
+import { Exchange, PhonyExchange } from './exchange';
 import * as Alpacas from '@master-chief/alpaca';
 import { AlpacasExchange } from './exchange';
 import moment from 'moment';
@@ -9,13 +9,14 @@ import momentTimezone from 'moment-timezone';
 import * as exception from './exceptions';
 import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
-import color from 'chalk';
 import { INotification } from './notification';
+import * as W from './workers';
 
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
-    exchange: joi.object().instance(AlpacasExchange).required(), //Currently we don't have a base Exchange class 
+    exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
+    mainWorker: joi.required(),    //TODO: Need a way to actually type this, though JS makes no differentiation between a function and constructor
     purchaseOptions: joi.object({
         takeProfitPercentage: joi.number().required(),
         stopLimitPercentage: joi.number().required(),
@@ -41,17 +42,12 @@ export interface ITickerChange {
     [key: string]: string | number | IStockChange;
 }
 
-export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
-    purchaseOptions: IPurchaseOptions;
-    exchange: Exchange<TOrderInput, TOrderInput, TOrder>;
-    notification: INotification;
-}
-
 export interface IStockServiceOptions extends IServiceOptions {
     datasource: IDataSource;
     notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
+    mainWorker: W.IStockWorker<ITickerChange>; //This is how we pass different algorithms to the service
 }
 
 export interface IPurchaseOptions {
@@ -73,6 +69,8 @@ export interface IStockChange {
 export class StockService extends Service<ITickerChange, ITickerChange> {
     private processables: ITickerChange[];
     private purchaseOptions: IPurchaseOptions;
+    private mainWorker: W.IStockWorker<ITickerChange>;
+
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
     datasource: IDataSource;
     notification: INotification;
@@ -84,6 +82,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         this.notification = options.notification;
         this.purchaseOptions = options.purchaseOptions;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
+        this.mainWorker = options.mainWorker;
     }
 
     initialize(): Promise<void> {
@@ -109,16 +108,6 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         })
     }
 
-
-    /*
-        Notes: Since we want to conserve API calls (for now) to Yahoo, the output of preProcess should be pushed to a "processable" array. Before making an API call, first `preProcess` should check that array for a ticker value
-        , and if there is still some, select one and provide it to `process()`, else make an API call and do above logic.
-
-        ALSO - Currently all of our stock data is fetched and groomed via Yahoo Finance. This is OK for now, but in the future, we should look into using Polygon.io with our Alpacas keys.
-        All of the below data we scrape, is available via their /v2/snapshot/locale/us/markets/stocks/tickers/{ticker} endpoint
-
-        Also, here is another endpoint we could use for getting the top gainers - v2/snapshot/locale/us/markets/stocks/{direction}
-    */
     preProcess = async (): Promise<ITickerChange> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
         let marketIsOpen = (await this.exchange.isMarketTime());
@@ -181,7 +170,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     }
 
     makeWorker(options: IWorkerOptions): IWorker<ITickerChange> {
-        return new StockServiceWorker({
+        return new this.mainWorker({
             ...options,
             exceptionHandler: this.exceptionHandler,
             purchaseOptions: this.purchaseOptions,
@@ -203,97 +192,5 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     close(): Promise<void> {
         return Promise.all([ this.datasource.close(), this.exchange.close(), this.notification.close() ])
         .then(() => super.close());
-    }
-}
-
-
-export class StockServiceWorker extends Worker<ITickerChange> {
-    logger: Logger;
-    private purchaseOptions: IPurchaseOptions;
-    private notification: INotification;
-    exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstract. The Exchange should use a more abstract and simple interface.
-
-    constructor(options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
-        super(options);
-        this.logger = options.logger;
-        this.purchaseOptions = options.purchaseOptions;
-        this.exchange = options.exchange;
-        this.notification = options.notification;
-    }
-
-    process(ticker: ITickerChange): Promise<void> {
-        return this._processTicker(ticker);
-    }
-
-    //TODO: Create algo for understanding what is a good stock to purchase, and what is the stop limit and take profit limit
-    _processTicker(ticker: ITickerChange): Promise<void> {
-        return this.getPrevStockPrice(ticker.ticker, this.purchaseOptions.prevStockPriceOptions.unit, this.purchaseOptions.prevStockPriceOptions.measurement)
-        .then((prevStockPrice: number) => {
-            let changePercent = this.getChangePercent(prevStockPrice, ticker.price);
-
-            this.logger.log(LogLevel.INFO, `Change Percent ${changePercent.percentChange} ${changePercent.persuasion} for ${ticker.ticker}`)
-            //TODO: Make the expected percentChange expectation configurable in the service
-            if((changePercent.percentChange >= .005 && changePercent.persuasion === 'up') && (ticker.price <= this.purchaseOptions.maxSharePrice)) {
-                let takeProfitDollarAmount = ticker.price + (ticker.price * this.purchaseOptions.takeProfitPercentage);
-                let stopLossDollarAmount = ticker.price - (ticker.price * this.purchaseOptions.stopLimitPercentage);
-
-                return this.notification.notify({
-                    message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
-                    additionaData: {
-                        exchange: this.exchange.constructor.name,
-                        receiveTime: new Date().toISOString()
-                        //TODO: We should definitely include a way to denote which datasource this information is coming from
-                    }
-                });
-                //Lets set our buy here, and our different sell and stop limits with the above price
-                // return this.exchange.getBuyingPower()
-                // .then(amount => {
-                //     this.logger.log(LogLevel.INFO, color.green(`Checking buying power.`))
-                //     const cost = this.purchaseOptions.maxShareCount * this.purchaseOptions.maxSharePrice;
-                //     if(cost < amount) {
-                //         return this.notification.notify(`We should purchase ticker ${ticker.ticker}`);
-                //     } else {
-                //         this.logger.log(LogLevel.WARN, color.magentaBright(`${this.exchange.constructor.name} does not have enough buy power to purchase the configured amount of shares for ${ticker.ticker}`));
-                //         return;
-                //     }
-                // })
-
-            } else {
-                //no-op
-            }
-        })
-    }
-
-    //TODO: This needs to be on the Exchange interface, this should not be something that a worker can do by itself.
-    getPrevStockPrice(ticker: string, amount: number = 15,  unit: moment.DurationInputArg2 = 'minutes', limit: number = 100): Promise<number> {
-        let nycTime = momentTimezone.tz(new Date().getTime(), 'America/New_York').subtract(amount, unit);
-        let timestamp = nycTime.valueOf();
-        return axios.get(`https://api.polygon.io/v2/ticks/stocks/trades/${ticker}/${nycTime.format('YYYY-MM-DD')}`, {
-            params: {
-                timestamp: timestamp,
-                limit,
-                apiKey: process.env['ALPACAS_API_KEY'] || "",
-                reverse: false
-            }
-        })
-        .then((data: AxiosResponse) => {
-            //TODO: We should create a type for the data returned here
-            if(data.data.results_count > 0) {
-                let priceAsNumber = Number(data.data.results[data.data.results_count -1].p);
-                return Number(priceAsNumber.toFixed(2));
-            } else {
-                this.logger.log(LogLevel.ERROR, `Failed to get previous price for ${ticker}`)
-                throw new exception.UnprocessableTicker(ticker);
-            }
-        });
-    }
-
-    //Here we take the different prices, and come up with the % of change in the stock price
-    getChangePercent(prevPrice: number, currentPrice: number): IStockChange {
-        let change: number = (currentPrice - prevPrice) / prevPrice;
-        let isPositive: boolean = !change.toString().includes('-');
-        let removedSymbols = parseFloat(change.toString().replace('-', ""));
-        change = Number(removedSymbols.toFixed(3)); //NOTE: This does rounding to the nearest number
-        return { percentChange: change, persuasion: isPositive ? 'up' : 'down' };
     }
 }

@@ -2,8 +2,8 @@ const joi = require('joi');
 const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
-const { PhonyExchange } = require('../lib/exchange');
-const { PhonyNotification } = require('../lib/notification');
+const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
+const { DiscordNotification } = require('../lib/notification');
 const { TopGainerNotificationStockWorker } = require('../lib/workers');
 
 const logger = winston.createLogger({
@@ -14,7 +14,7 @@ const logger = winston.createLogger({
             filename: `${new Date().toISOString()}-${process.env['CONFIG_FILE'] || "LOCAL"}.log`
         })
     ],
-    level: "silly",
+    level: "info",
     format: winston.format.combine(
         winston.format.colorize(),
         winston.format.simple()
@@ -41,7 +41,11 @@ const exchange = new PhonyExchange({
     logger
 });
 
-const notification = new PhonyNotification();
+const notification = new DiscordNotification({
+    guildId: 'GUILD_ID',
+    logger,
+    token: (process.env['DISCORD_API_TOKEN'] || "")
+});
 
 const serviceOptions = {
     concurrency: 1,

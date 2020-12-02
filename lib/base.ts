@@ -105,6 +105,7 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
                     logger: this.logger,
                     _preProcessor: this.preProcess
                 });
+                this.logger.log(LogLevel.INFO, `Spawned ${worker.constructor.name} Worker ${workerId}`);
                 this.workers.set(workerId, worker);
             }
         })
@@ -112,7 +113,10 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
             let pendingWork: Promise<any>[] = [];
 
             this.workers.forEach(worker => {
-                pendingWork.push(worker.initialize().then(() => worker.start()));
+                pendingWork.push(worker.initialize().then(() => {
+                    worker.start();
+                    this.logger.log(LogLevel.INFO, `Worker ${worker.id}#start():SUCCESS`);
+                }));
             });
 
             return Promise.all(pendingWork);
@@ -141,10 +145,10 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
         });
 
         return Promise.all(pendingWork)
-        .then(() => this.logger.log(LogLevel.INFO, `${this.constructor.name}.shutdown():successful.`))
+        .then(() => this.logger.log(LogLevel.INFO, `${this.constructor.name}#shutdown():SUCCESS`))
         .then(() => {})
         .catch((err) => {
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}.shutdown():error - ${err}`);
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#shutdown():ERROR - ${err}`);
             // Swallow error intentionally, allow service to close even with an error;
         });
     }

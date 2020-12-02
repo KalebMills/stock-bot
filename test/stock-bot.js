@@ -23,6 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const stock_bot_1 = require("../lib/stock-bot");
+const workers_1 = require("../lib/workers");
 const winston_1 = __importDefault(require("winston"));
 const assert = __importStar(require("assert"));
 const exchange_1 = require("../lib/exchange");
@@ -70,6 +71,8 @@ const serviceOptions = {
     datasource,
     exchange,
     notification,
+    //@ts-ignore
+    mainWorker: workers_1.TopGainerNotificationStockWorker,
     purchaseOptions: {
         takeProfitPercentage: .05,
         stopLimitPercentage: .07,
@@ -91,7 +94,7 @@ describe('#StockService', () => {
 });
 describe('#StockWorker', () => {
     it('Can create a StockServiceWorker instance', () => {
-        worker = new stock_bot_1.StockServiceWorker({
+        worker = new workers_1.TopGainerNotificationStockWorker({
             _preProcessor: () => service.preProcess(),
             id: 'TEST',
             logger,
@@ -110,7 +113,7 @@ describe('#StockWorker', () => {
             exchange,
             exceptionHandler: (err) => { }
         });
-        assert.strictEqual(worker instanceof stock_bot_1.StockServiceWorker, true);
+        assert.strictEqual(worker instanceof workers_1.TopGainerNotificationStockWorker, true);
     });
     it('getChangePercent() can accurately return a percentage of change, as well as the persuasion', () => {
         // prevPrice, currentPrice, expected change%, change persuasion
