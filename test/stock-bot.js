@@ -73,10 +73,6 @@ const serviceOptions = {
     notification,
     //@ts-ignore
     mainWorker: workers_1.TopGainerNotificationStockWorker,
-    googleSheets: {
-        id: '1gCdnOWYckCDZh5VTn3FaOasB4h3XXyBneg-gu6yT5Ag',
-        authPath: '/home/keys/google-sheets-key.json'
-    },
     purchaseOptions: {
         takeProfitPercentage: .05,
         stopLimitPercentage: .07,
@@ -115,8 +111,7 @@ describe('#StockWorker', () => {
             },
             notification,
             exchange,
-            exceptionHandler: (err) => { },
-            postTransaction: (data) => service.postTransaction(data)
+            exceptionHandler: (err) => { }
         });
         assert.strictEqual(worker instanceof workers_1.TopGainerNotificationStockWorker, true);
     });

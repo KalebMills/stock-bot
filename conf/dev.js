@@ -51,10 +51,6 @@ const serviceOptions = {
     },
     datasource,
     exchange,
-    googleSheets: {
-        id: 'SHEET_ID',
-        authPath: '/home/keys/google-sheets-key.json'
-    },
     mainWorker: TopGainerNotificationStockWorker,
     purchaseOptions: {
         takeProfitPercentage: .015,

@@ -10,7 +10,6 @@ import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
 
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
-    postTransaction: (data: { [key: string]: string | number }) => Promise<void>;
     purchaseOptions: IPurchaseOptions;
     exchange: Exchange<TOrderInput, TOrderInput, TOrder>;
     notification: INotification;
@@ -33,7 +32,6 @@ export abstract class StockWorker extends Worker<ITickerChange> {
 
 export class TopGainerNotificationStockWorker extends StockWorker {
     logger: Logger;
-    private postTransaction: (data: {[key: string]: string | number}) => Promise<void>;
     private purchaseOptions: IPurchaseOptions;
     private notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstract. The Exchange should use a more abstract and simple interface.
@@ -41,7 +39,6 @@ export class TopGainerNotificationStockWorker extends StockWorker {
     constructor(options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
         this.logger = options.logger;
-        this.postTransaction = options.postTransaction;
         this.purchaseOptions = options.purchaseOptions;
         this.exchange = options.exchange;
         this.notification = options.notification;

@@ -7,7 +7,6 @@ import { AlpacasExchange } from './exchange';
 import moment from 'moment';
 import momentTimezone from 'moment-timezone';
 import * as exception from './exceptions';
-import * as sheets from 'google-spreadsheet';
 import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
 import { INotification } from './notification';
@@ -17,12 +16,7 @@ export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
     exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
-    googleSheets: joi.object({
-        id: joi.string().required(),
-        authPath: joi.string().required()
-    }).length(2).required(),
     mainWorker: joi.required(),    //TODO: Need a way to actually type this, though JS makes no differentiation between a function and constructor
-
     purchaseOptions: joi.object({
         takeProfitPercentage: joi.number().required(),
         stopLimitPercentage: joi.number().required(),
@@ -52,10 +46,6 @@ export interface IStockServiceOptions extends IServiceOptions {
     datasource: IDataSource;
     notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
-    googleSheets: {
-        id: string;
-        authPath: string; //Since the keys are in a JSON file stored on the local machine
-    }
     purchaseOptions: IPurchaseOptions;
     mainWorker: W.IStockWorker<ITickerChange>; //This is how we pass different algorithms to the service
 }
@@ -77,8 +67,6 @@ export interface IStockChange {
 }
 
 export class StockService extends Service<ITickerChange, ITickerChange> {
-    sheetsClient!: sheets.GoogleSpreadsheetWorksheet;
-    private options: IStockServiceOptions;
     private processables: ITickerChange[];
     private purchaseOptions: IPurchaseOptions;
     private mainWorker: W.IStockWorker<ITickerChange>;
@@ -89,7 +77,6 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
 
     constructor(options: IStockServiceOptions) {
         super(options);
-        this.options = options;
         this.exchange = options.exchange;
         this.datasource = options.datasource;
         this.notification = options.notification;
@@ -101,16 +88,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     initialize(): Promise<void> {
         return Promise.all([ super.initialize(), this.datasource.initialize(), this.exchange.initialize(), this.notification.initialize() ])
         .then(() => {
-            //TODO: Should make this it's own abstraction, something like 
-            let sheet = new sheets.GoogleSpreadsheet(this.options.googleSheets.id);
-            return sheet.useServiceAccountAuth(require(this.options.googleSheets.authPath))
-            .then(() => sheet.loadInfo())
-            .then(() => {
-                this.sheetsClient = sheet.sheetsById[0];
-            })
-        })
-        .then(() => {
-            this.logger.log(LogLevel.INFO, `Successfully authenticated with Google Sheets API`)
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
         });
     }
 
@@ -191,19 +169,10 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         }
     }
 
-    //TODO: This should be in some type of database abstraction
-    postTransaction = (data: {[key: string]: string | number}): Promise<void> => {
-        let date = momentTimezone().tz('America/Monterrey').format('MM-DD-YYYY');
-        let time = momentTimezone().tz('America/Monterrey').format('HH:mm');
-        return this.sheetsClient.addRow({ ...data, date, time })
-        .then(() => {})
-    }
-
     makeWorker(options: IWorkerOptions): IWorker<ITickerChange> {
         return new this.mainWorker({
             ...options,
             exceptionHandler: this.exceptionHandler,
-            postTransaction: this.postTransaction,
             purchaseOptions: this.purchaseOptions,
             exchange: this.exchange,
             notification: this.notification
