@@ -2,9 +2,9 @@ const joi = require('joi');
 const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
-const { PhonyExchange } = require('../lib/exchange');
-const { PhonyNotification } = require('../lib/notification');
-const { TopGainerNotificationStockWorker } = require('../lib/workers');
+const { AlpacasExchange } = require('../lib/exchange');
+const { DiscordNotification } = require('../lib/notification');
+const { TopGainerNotificationStockWorker } = require('../lib/stock-bot');
 
 const logger = winston.createLogger({
     transports: [
@@ -14,7 +14,7 @@ const logger = winston.createLogger({
             filename: `${new Date().toISOString()}-${process.env['CONFIG_FILE'] || "LOCAL"}.log`
         })
     ],
-    level: "silly",
+    level: "info",
     format: winston.format.combine(
         winston.format.colorize(),
         winston.format.simple()
@@ -37,11 +37,26 @@ const datasourceOptions = {
 
 const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
-const exchange = new PhonyExchange({
-    logger
+const exchange = new AlpacasExchange({
+    logger, 
+    keyId: (process.env['ALPACAS_API_KEY'] || ""),
+    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
+    acceptableGain: {
+        unit: 1,
+        type: 'percent'
+    },
+    acceptableLoss: {
+        unit: 2,
+        type: 'percent'
+    },
+    testing: true
 });
 
-const notification = new PhonyNotification();
+const notification = new DiscordNotification({
+    guildId: 'GUILD_ID',
+    logger,
+    token: (process.env['DISCORD_API_TOKEN'] || "")
+});
 
 const serviceOptions = {
     concurrency: 1,
@@ -55,7 +70,7 @@ const serviceOptions = {
         id: 'SHEET_ID',
         authPath: '/home/keys/google-sheets-key.json'
     },
-    mainWorker: TopGainerNotificationStockWorker,
+    mainWorker: TopGainerStockWorker,
     purchaseOptions: {
         takeProfitPercentage: .015,
         stopLimitPercentage: .05,
