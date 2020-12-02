@@ -16,11 +16,6 @@ export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
     exchange: joi.object().instance(AlpacasExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
-    googleSheets: joi.object({
-        id: joi.string().required(),
-        authPath: joi.string().required()
-    }).length(2).required(),
-
     purchaseOptions: joi.object({
         takeProfitPercentage: joi.number().required(),
         stopLimitPercentage: joi.number().required(),
