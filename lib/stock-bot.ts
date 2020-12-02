@@ -56,10 +56,6 @@ export interface IStockServiceOptions extends IServiceOptions {
     datasource: IDataSource;
     notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
-    googleSheets: {
-        id: string;
-        authPath: string; //Since the keys are in a JSON file stored on the local machine
-    }
     purchaseOptions: IPurchaseOptions;
 }
 

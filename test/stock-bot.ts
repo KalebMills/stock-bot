@@ -56,10 +56,6 @@ const serviceOptions: IStockServiceOptions = {
     datasource,
     exchange,
     notification,
-    googleSheets: {
-        id: '1gCdnOWYckCDZh5VTn3FaOasB4h3XXyBneg-gu6yT5Ag',
-        authPath: '/home/keys/google-sheets-key.json'
-    },
     purchaseOptions: {
         takeProfitPercentage: .05,
         stopLimitPercentage: .07,

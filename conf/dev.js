@@ -73,10 +73,6 @@ const serviceOptions = {
     },
     datasource,
     exchange,
-    googleSheets: {
-        id: 'ID',
-        authPath: '/home/keys/google-sheets-key.json'
-    },
     purchaseOptions: {
         takeProfitPercentage: .015,
         stopLimitPercentage: .05,
