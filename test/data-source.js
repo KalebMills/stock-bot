@@ -25,9 +25,7 @@ const joi = __importStar(require("joi"));
 const assert = __importStar(require("assert"));
 const chai = __importStar(require("chai"));
 const logger = winston.createLogger({
-    transports: [
-        new winston.transports.Console()
-    ],
+    transports: [new winston.transports.Console()],
     level: "silly"
 });
 let fakeDataSourceInstance;

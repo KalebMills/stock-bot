@@ -87,7 +87,9 @@ describe('#RedisDataStore', () => {
     it('Can construct RedisDataStore', () => {
         store = new data_store_1.RedisDataStore({
             host: 'localhost',
-            logger: winston_1.default.createLogger()
+            logger: winston_1.default.createLogger({
+                transports: [new winston_1.default.transports.Console()]
+            })
         });
         chai.assert.instanceOf(store, data_store_1.RedisDataStore);
     });
