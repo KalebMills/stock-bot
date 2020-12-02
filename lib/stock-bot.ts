@@ -1,7 +1,7 @@
 import { Service, Worker, IServiceOptions, IWorker, IWorkerOptions, LogLevel, Logger, promiseRetry } from './base';
 import BPromise from 'bluebird';
 import axios, { AxiosResponse } from 'axios';
-import { Exchange } from './exchange';
+import { Exchange, PhonyExchange } from './exchange';
 import * as Alpacas from '@master-chief/alpaca';
 import { AlpacasExchange } from './exchange';
 import moment from 'moment';
@@ -15,7 +15,7 @@ import { INotification } from './notification';
 
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
-    exchange: joi.object().instance(AlpacasExchange).required(), //Currently we don't have a base Exchange class 
+    exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
     googleSheets: joi.object({
         id: joi.string().required(),

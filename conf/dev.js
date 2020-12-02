@@ -36,7 +36,9 @@ const datasourceOptions = {
 
 const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
-const exchange = new PhonyExchange();
+const exchange = new PhonyExchange({
+    logger
+});
 
 const notification = new PhonyNotification({
     guildId: 'GUILD-ID',
