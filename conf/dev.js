@@ -2,7 +2,7 @@ const joi = require('joi');
 const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
-const { AlpacasExchange } = require('../lib/exchange');
+const { PhonyExchange } = require('../lib/exchange');
 const { PhonyNotification } = require('../lib/notification');
 const { TopGainerNotificationStockWorker } = require('../lib/workers');
 
@@ -37,19 +37,8 @@ const datasourceOptions = {
 
 const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
-const exchange = new AlpacasExchange({
-    logger, 
-    keyId: (process.env['ALPACAS_API_KEY'] || ""),
-    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
-    acceptableGain: {
-        unit: 1,
-        type: 'percent'
-    },
-    acceptableLoss: {
-        unit: 2,
-        type: 'percent'
-    },
-    testing: true
+const exchange = new PhonyExchange({
+    logger
 });
 
 const notification = new PhonyNotification();
@@ -66,7 +55,7 @@ const serviceOptions = {
         id: 'SHEET_ID',
         authPath: '/home/keys/google-sheets-key.json'
     },
-    mainWorker: TopGainerStockWorker,
+    mainWorker: TopGainerNotificationStockWorker,
     purchaseOptions: {
         takeProfitPercentage: .015,
         stopLimitPercentage: .05,
