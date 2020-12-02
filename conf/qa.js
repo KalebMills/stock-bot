@@ -4,7 +4,7 @@ const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange } = require('../lib/exchange');
 const { DiscordNotification } = require('../lib/notification');
-const { TopGainerStockWorker } = require('../lib/stock-bot');
+const { TopGainerNotificationStockWorker } = require('../lib/stock-bot');
 
 const logger = winston.createLogger({
     transports: [
