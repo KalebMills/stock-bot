@@ -7,7 +7,6 @@ import { AlpacasExchange } from './exchange';
 import moment from 'moment';
 import momentTimezone from 'moment-timezone';
 import * as exception from './exceptions';
-import * as sheets from 'google-spreadsheet';
 import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
 import color from 'chalk';
@@ -48,7 +47,6 @@ export interface ITickerChange {
 }
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
-    postTransaction: (data: { [key: string]: string | number }) => Promise<void>;
     purchaseOptions: IPurchaseOptions;
     exchange: Exchange<TOrderInput, TOrderInput, TOrder>;
     notification: INotification;
@@ -82,8 +80,6 @@ export interface IStockChange {
 }
 
 export class StockService extends Service<ITickerChange, ITickerChange> {
-    sheetsClient!: sheets.GoogleSpreadsheetWorksheet;
-    private options: IStockServiceOptions;
     private processables: ITickerChange[];
     private purchaseOptions: IPurchaseOptions;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
@@ -92,7 +88,6 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
 
     constructor(options: IStockServiceOptions) {
         super(options);
-        this.options = options;
         this.exchange = options.exchange;
         this.datasource = options.datasource;
         this.notification = options.notification;
@@ -103,16 +98,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     initialize(): Promise<void> {
         return Promise.all([ super.initialize(), this.datasource.initialize(), this.exchange.initialize(), this.notification.initialize() ])
         .then(() => {
-            //TODO: Should make this it's own abstraction, something like 
-            let sheet = new sheets.GoogleSpreadsheet(this.options.googleSheets.id);
-            return sheet.useServiceAccountAuth(require(this.options.googleSheets.authPath))
-            .then(() => sheet.loadInfo())
-            .then(() => {
-                this.sheetsClient = sheet.sheetsById[0];
-            })
-        })
-        .then(() => {
-            this.logger.log(LogLevel.INFO, `Successfully authenticated with Google Sheets API`)
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
         });
     }
 
@@ -203,19 +189,10 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         }
     }
 
-    //TODO: This should be in some type of database abstraction
-    postTransaction = (data: {[key: string]: string | number}): Promise<void> => {
-        let date = momentTimezone().tz('America/Monterrey').format('MM-DD-YYYY');
-        let time = momentTimezone().tz('America/Monterrey').format('HH:mm');
-        return this.sheetsClient.addRow({ ...data, date, time })
-        .then(() => {})
-    }
-
     makeWorker(options: IWorkerOptions): IWorker<ITickerChange> {
         return new StockServiceWorker({
             ...options,
             exceptionHandler: this.exceptionHandler,
-            postTransaction: this.postTransaction,
             purchaseOptions: this.purchaseOptions,
             exchange: this.exchange,
             notification: this.notification
@@ -241,7 +218,6 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
 
 export class StockServiceWorker extends Worker<ITickerChange> {
     logger: Logger;
-    private postTransaction: (data: {[key: string]: string | number}) => Promise<void>;
     private purchaseOptions: IPurchaseOptions;
     private notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstract. The Exchange should use a more abstract and simple interface.
@@ -249,7 +225,6 @@ export class StockServiceWorker extends Worker<ITickerChange> {
     constructor(options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
         this.logger = options.logger;
-        this.postTransaction = options.postTransaction;
         this.purchaseOptions = options.purchaseOptions;
         this.exchange = options.exchange;
         this.notification = options.notification;

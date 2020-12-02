@@ -102,8 +102,7 @@ describe('#StockWorker', () => {
             },
             notification,
             exchange,
-            exceptionHandler: (err: Error) => {},
-            postTransaction: (data) => service.postTransaction(data)
+            exceptionHandler: (err: Error) => {}
         });
         assert.strictEqual(worker instanceof StockServiceWorker, true);
     });
