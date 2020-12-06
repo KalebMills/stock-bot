@@ -1,0 +1,6 @@
+pandas
+numpy
+matplotlib
+backtrader
+alpaca-trade-api
+yfinance

@@ -1,4 +1,6 @@
 import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -47,4 +49,16 @@ export const runCmd = (cmd: string): Promise<void> => {
             }
         })
     });
+}
+
+export const loadTickersFromFile = (path: string): string[] => {
+    let d: string[] = [];
+    const data = fs.readFileSync(path, { encoding: 'utf-8' }).toString();
+    const split = data.split('\n');
+
+    for (let line of split) {
+        d.push(line);
+    }
+
+    return d;
 }
