@@ -208,51 +208,6 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
 }
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
 
-
-export interface TickerStreamDataSourceOptions {
-    tickers: string[];
-}
-
-export class TickerStreamDataSource extends Alpacas.AlpacaStream implements IInitializable, ICloseable {
-    private readonly tickers: string[];
-    
-    constructor(options: TickerStreamDataSourceOptions) {
-        super({
-            credentials: {
-                key: (process.env['ALPACAS_API_KEY'] || ""),
-                secret: (process.env['ALPACAS_SECRET_KEY'] || "")
-            },
-            stream: "market_data"
-        });
-
-        this.tickers = options.tickers;
-    }
-
-    initialize(): Promise<void> {
-        return new Promise((resolve) => {
-            this.on('authenticated', () => {
-                this.subscribe(this.tickers);
-                resolve();
-            })
-        });
-    }
-
-    listen() {
-        this.on('quote', (quote) => {
-            console.log(JSON.stringify(quote));
-        })
-    }
-
-    close(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            this.unsubscribe(this.tickers);
-            this.on('close', () => resolve());
-        });
-    }
-}
-
-//TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
-
 export interface IPolygonLiveDataSourceOptions extends IDataSourceOptions {
     subscribeTicker: string[];
 }
