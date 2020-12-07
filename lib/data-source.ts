@@ -332,24 +332,3 @@ export class PolygonLiveDataSource extends DataSource implements IDataSource {
         });
     }
 }
-
-
-const tickers = [];
-
-const data = fs.readFileSync(p.join(__dirname, '..', '..', 'tickers.txt'), { encoding: 'utf-8' });
-
-for (let line of data.split('\n')) {
-    tickers.push(line);
-}
-
-const np = new PolygonLiveDataSource({
-    logger: winston.createLogger({
-        transports: [ new winston.transports.Console() ]
-    }),
-    subscribeTicker: tickers,
-    validationSchema: joi.object({})
-})
-
-np.initialize()
-.then(() => console.log('INITIALIZED'))
-.finally(() => np.close())
