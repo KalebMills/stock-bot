@@ -6,9 +6,7 @@ import * as assert from 'assert';
 import * as chai from 'chai';
 
 const logger =  winston.createLogger({
-    transports: [
-        new winston.transports.Console()
-    ],
+    transports: [ new winston.transports.Console() ],
     level: "silly"
 });
 
@@ -29,7 +27,6 @@ describe('#DataSource abstract class', () => {
     it('Can create a base DataSource class', () => {
         const baseOptions: D.IDataSourceOptions = {
             logger,
-            scrapeUrl: '',
             validationSchema: joi.object({
                 ticker: joi.string().required(),
                 price: joi.number().required()

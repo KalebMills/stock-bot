@@ -25,9 +25,7 @@ const joi = __importStar(require("joi"));
 const assert = __importStar(require("assert"));
 const chai = __importStar(require("chai"));
 const logger = winston.createLogger({
-    transports: [
-        new winston.transports.Console()
-    ],
+    transports: [new winston.transports.Console()],
     level: "silly"
 });
 let fakeDataSourceInstance;
@@ -43,7 +41,6 @@ describe('#DataSource abstract class', () => {
     it('Can create a base DataSource class', () => {
         const baseOptions = {
             logger,
-            scrapeUrl: '',
             validationSchema: joi.object({
                 ticker: joi.string().required(),
                 price: joi.number().required()
