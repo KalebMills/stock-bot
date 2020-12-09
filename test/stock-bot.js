@@ -30,6 +30,7 @@ const exchange_1 = require("../lib/exchange");
 const joi = __importStar(require("joi"));
 const D = __importStar(require("../lib/data-source"));
 const N = __importStar(require("../lib/notification"));
+const data_store_1 = require("../lib/data-store");
 const logger = winston_1.default.createLogger({ transports: [new winston_1.default.transports.Console()] });
 const baseOptions = {
     logger,
@@ -47,6 +48,7 @@ class FakeDatasource extends D.DataSource {
     }
 }
 const datasource = new FakeDatasource(baseOptions);
+const dataStore = new data_store_1.PhonyDataStore();
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
 const exchange = new exchange_1.AlpacasExchange({
     logger,
@@ -109,6 +111,7 @@ describe('#StockWorker', () => {
                     unit: 1
                 }
             },
+            dataStore,
             notification,
             exchange,
             exceptionHandler: (err) => { }

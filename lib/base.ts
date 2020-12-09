@@ -193,6 +193,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
     run(): void {
         if(this.isRunning && !this._pendingProcess && !this.isClosed) {
             
+            //TODO: this._preProcessor should not be called here, instead this._preProcessor should mostly likely be removed.
             this._pendingProcess = this._preProcessor().then((args) => this.process(args))
 
             this._pendingProcess

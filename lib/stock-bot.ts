@@ -108,6 +108,12 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         })
     }
 
+
+    /*
+        All this function does is verify that the processable work array has data in it.. this is later on called by the Worker class before process
+        This should simply be a function for fetching work in a service, the only time a worker should have it process method invoked, is if there is data to supply to it.
+    */
+
     preProcess = async (): Promise<ITickerChange> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
         let marketIsOpen = (await this.exchange.isMarketTime());

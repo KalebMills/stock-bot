@@ -90,7 +90,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
 
     getBuyingPower(): Promise<number> {
         return this.getAccount()
-        .then(res => res.buying_power);
+        .then(res => res.daytrading_buying_power);
     }
 
     getPriceByTicker(ticker: string): Promise<number> {

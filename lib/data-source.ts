@@ -15,12 +15,15 @@ import { URL } from 'url'
 import * as p from 'path';
 import * as winston from 'winston';
 import * as fs from 'fs';
-
-export interface IDataSource extends ICloseable, IInitializable {
+import { MemoryDataStore } from './data-store';
+import { QuoteEvent } from './workers';
+import * as uuid from 'uuid';
+import { Quote } from '@master-chief/alpaca/types/entities';
+export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
     timedOutTickers: Map<string, U.IDeferredPromise>;
     validateData(input: any): boolean;
-    scrapeDatasource(): Promise<ITickerChange[]>;
+    scrapeDatasource(): Promise<TOutput[]>;
     timeoutTicker(ticker: string, timeout?: number): void;
 }
 
@@ -29,7 +32,7 @@ export interface IDataSourceOptions {
     logger: Logger;
 }
 
-export abstract class DataSource implements IDataSource {
+export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     readonly validationSchema: joi.Schema;
     logger: Logger;
 
@@ -58,12 +61,13 @@ export abstract class DataSource implements IDataSource {
         }
     }
 
-    abstract scrapeDatasource(): Promise<ITickerChange[]>;
+    abstract scrapeDatasource(): Promise<TOutput[]>;
 
     timeoutTicker(ticker: string, timeout?: number /* in seconds */): void {
         if (!this.timedOutTickers.has(ticker)) {
             let t: NodeJS.Timeout;
             let timeoutFunction = new Promise((resolve, reject) => {
+                //TODO: It's possible we could increase performance by using Promise.delay here instead of creating a bunch of timers
                 t = setTimeout(() => {
                     console.log('Successfully resolved a timed out ticker')
                     resolve()
@@ -101,7 +105,7 @@ export abstract class DataSource implements IDataSource {
 }
 
 
-export class YahooGainersDataSource extends DataSource implements IDataSource {
+export class YahooGainersDataSource extends DataSource<ITickerChange> implements IDataSource {
     scrapeUrl: string;
     constructor(options: IDataSourceOptions) {
         super(options);
@@ -164,7 +168,7 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
     }
 }
 
-export class PolygonGainersLosersDataSource extends DataSource implements IDataSource {
+export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> implements IDataSource {
     scrapeUrl: string;
     apiKey: string;
     constructor(options: IDataSourceOptions) {
@@ -212,9 +216,9 @@ export interface IPolygonLiveDataSourceOptions extends IDataSourceOptions {
     subscribeTicker: string[];
 }
 
-export class PolygonLiveDataSource extends DataSource implements IDataSource {
+export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDataSource<QuoteEvent> {
     private readonly scrapeUrl: string;
-    private data: any[]; //TODO: Needs to be typed
+    private data: QuoteEvent[];
     private emitter: EventEmitter;
     private polygonConn!: WebSocket;
     private subscribeTicker: string[];
@@ -262,11 +266,14 @@ export class PolygonLiveDataSource extends DataSource implements IDataSource {
         return this.initializePromise.promise;
     }
 
-    scrapeDatasource(): Promise<ITickerChange[]> {
-        const outputData = [...this.data];
+    scrapeDatasource(): Promise<QuoteEvent[]> {
+        const outputData: QuoteEvent[] = [...this.data];
         
+        console.log(`${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
         // Remove returned values from the current outputData array;
-        this.data = this.data.filter(obj => !outputData[obj]);
+        // this.data = this.data.filter(obj => {
+        //     return !outputData.includes(obj);
+        // });
 
         return Promise.resolve(outputData);
     }
@@ -306,7 +313,7 @@ export class PolygonLiveDataSource extends DataSource implements IDataSource {
                 this._statusHandler(data);
                 break;
             case "Q":
-                console.log(JSON.stringify(data));
+                // console.log(JSON.stringify(data))
                 this.emitter.emit('QUOTE', data);
                 break;
 
@@ -315,7 +322,7 @@ export class PolygonLiveDataSource extends DataSource implements IDataSource {
         }
     }
 
-    _quoteHandler = (data: any) => {
+    _quoteHandler = (data: QuoteEvent) => {
         this.data.push(data);
     }
 
@@ -332,3 +339,50 @@ export class PolygonLiveDataSource extends DataSource implements IDataSource {
         });
     }
 }
+
+
+// const data = fs.readFileSync(p.join(__dirname, '..', '..', 'tickers.txt')).toString();
+
+// let tickers = []
+
+// for (let line of data.split('\n')) {
+//     tickers.push(line);
+// }
+
+
+// const np = new PolygonLiveDataSource({
+//     logger: winston.createLogger({
+//         transports: [new winston.transports.Console()]
+//     }),
+//     subscribeTicker: tickers,
+//     validationSchema: joi.object({})
+// })
+
+// const store = new MemoryDataStore();
+
+
+// np.initialize()
+// .then(() => new Promise((resolve, reject) => {
+//     setTimeout(() => resolve(), 10000);
+// }))
+// .then(() => np.scrapeDatasource())
+// .then(d => {
+//     const ran = uuid.v4();
+//     const p: Promise<any>[] = [];
+//     d.forEach(val => {
+//         let promise = store.save(`${val.sym}-${ran}`, val);
+//         p.push(promise);
+//     });
+
+//     return Promise.all(p).then(() => d);
+// })
+// .then(data => {
+//     console.log(`${store.constructor.name}#store has ${Object.keys(store['store']).length} keys in it`)
+//     return store.get('A*')
+//     .then(d2 => {
+//         console.log(JSON.stringify(d2))
+//         return d2;
+//     })
+// })
+// .then(data => console.log(JSON.stringify(data)))
+// .finally(() => np.close())

@@ -3,11 +3,16 @@ import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import { NotFoundError } from './exceptions';
 
 //TODO: Perhaps find a more robust way to truly type this rather than using `any`
-type DataStoreObject = { [key: string]: DataStoreObject | any };
+export type BaseDataStoreObject = { [key: string]: BaseDataStoreObject | any };
+
+export interface DataStoreObject<T = any> {
+    [key: string]: BaseDataStoreObject | T | any;
+}
+
 
 export interface IDataStore<TInput = DataStoreObject, TOutput = DataStoreObject> extends IInitializable, ICloseable {
     save(key: string, data: TInput): Promise<TOutput>;
-    get(keys: string): Promise<TOutput>;
+    get(keys: string): Promise<TOutput[]>;
     delete(keys: string): Promise<void>;
 }
 
@@ -19,7 +24,7 @@ export interface RedisDataStoreOptions {
     logger: Logger;
 }
 
-export class RedisDataStore implements IDataStore {
+export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutput> {
     private client: redis.Redis;
     private logger: Logger;
     private readonly port: number;
@@ -46,16 +51,32 @@ export class RedisDataStore implements IDataStore {
         });
     } 
 
-    get(data: string): Promise<DataStoreObject> {//Single ID
-        return new Promise<DataStoreObject>((resolve, reject) => {
-            this.client.hgetall(data, (err: Error | null, data: DataStoreObject) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(data);
-                }
-            })
-        });
+    /*
+        At MAX, we should have about 7k entries, so SCAN should not be a huge impact 
+    */
+    get(data: string): Promise<TOutput[]> {//Single ID
+        //TODO: This should handle a wildcard as the id, i.e TSLA-*, which would fetch us all of the entries in the DB with TSLA-uuid
+        if (data.includes('*')) { //Wildcard search
+            return new Promise<TOutput[]>((resolve, reject) => {
+                this.client.scan(0, 'match', data)
+                .then((data: [string, string[]]) => {
+                    //data[0] is supposed to be a new cursor, but we don't care about that
+                    console.log(data[1])
+                    resolve([]);
+                })
+                .catch(reject);
+            });
+        } else {
+            return new Promise<TOutput[]>((resolve, reject) => {
+                this.client.hgetall(data, (err: Error | null, data: DataStoreObject) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve([data as TOutput]);
+                    }
+                })
+            });
+        }
     }
 
     // need to type this, and require an id property to be present, since that's the only real way we can delete a key in Redis
@@ -92,9 +113,14 @@ export class MemoryDataStore implements IDataStore {
         return Promise.resolve(data);
     }
 
-    get(key: string): Promise<DataStoreObject> {
-        if (this._has(key)) {
-            return Promise.resolve(this.store[key]);
+    get(key: string): Promise<DataStoreObject[]> {
+        //Note, this will only ever return a single value in the array
+        if (this._has(key) || this._hasWildCard(key)) {
+            if (this._hasWildCard(key)) {
+                return this._fetchWildCardValues(key);
+            } else {
+                return Promise.resolve([this.store[key]]);
+            }
         } else {
             throw new NotFoundError(`${key} not found`);
         }
@@ -107,6 +133,20 @@ export class MemoryDataStore implements IDataStore {
 
     _has(key: string): boolean {
         return !!this.store.hasOwnProperty(key);
+    }
+
+    _hasWildCard = (key: string) => {
+        return key.includes('*');
+    }
+
+    //Only supports '*' as the wildcard
+    _fetchWildCardValues = (key: string): Promise<DataStoreObject[]> => {
+        const partialKey = key.replace('*', '');
+        const options = Object.keys(this.store);
+        const matches = options.filter(key => key.includes(partialKey));
+        console.log(`${matches.length} matches`)
+
+        return Promise.resolve(matches.map(key => this.store[key]));
     }
 
 

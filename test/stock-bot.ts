@@ -8,6 +8,7 @@ import { AlpacasExchange } from '../lib/exchange';
 import * as joi from 'joi';
 import * as D from '../lib/data-source';
 import * as N from '../lib/notification';
+import { PhonyDataStore } from '../lib/data-store';
 
 const logger: Logger = winston.createLogger({ transports: [ new winston.transports.Console() ] });
 
@@ -30,6 +31,8 @@ class FakeDatasource extends D.DataSource {
 }
 
 const datasource = new FakeDatasource(baseOptions);
+
+const dataStore = new PhonyDataStore();
 
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
 const exchange = new AlpacasExchange({
@@ -99,6 +102,7 @@ describe('#StockWorker', () => {
                     unit: 1
                 }
             },
+            dataStore,
             notification,
             exchange,
             exceptionHandler: (err: Error) => {}
