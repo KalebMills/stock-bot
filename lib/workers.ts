@@ -53,18 +53,28 @@ export class TopGainerNotificationStockWorker extends StockWorker {
         return this.getPrevStockPrice(ticker.ticker, this.purchaseOptions.prevStockPriceOptions.unit, this.purchaseOptions.prevStockPriceOptions.measurement)
         .then((prevStockPrice: number) => {
             let changePercent = this.getChangePercent(prevStockPrice, ticker.price);
-
             this.logger.log(LogLevel.INFO, `Change Percent ${changePercent.percentChange} ${changePercent.persuasion} for ${ticker.ticker}`)
+            let takeProfitDollarAmount = ticker.price + (ticker.price * this.purchaseOptions.takeProfitPercentage);
+            let stopLossDollarAmount = ticker.price - (ticker.price * this.purchaseOptions.stopLimitPercentage);
             //TODO: Make the expected percentChange expectation configurable in the service
             if((changePercent.percentChange >= .005 && changePercent.persuasion === 'up') && (ticker.price <= this.purchaseOptions.maxSharePrice)) {
-                let takeProfitDollarAmount = ticker.price + (ticker.price * this.purchaseOptions.takeProfitPercentage);
-                let stopLossDollarAmount = ticker.price - (ticker.price * this.purchaseOptions.stopLimitPercentage);
-
                 return this.notification.notify({
                     message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
                         exchange: this.exchange.constructor.name,
-                        receiveTime: new Date().toISOString()
+                        receiveTime: new Date().toISOString(),
+                        currentPrice: ticker.price,
+                        takeProfitAt: takeProfitDollarAmount,
+                        cutLossesAt: stopLossDollarAmount,
+                        //TODO: this will break for a yahoo data source, will need to fix
+                        //TODO: should probably standardize all these to volumes per minute so they are easier to compare
+                        volumeInfo: `The volume is currently ${ticker.currentVol}, it was ${ticker.prevDayVol} yesterday, it was ${ticker.prevMinVol} in the past minute`,
+                        // current price > vwap is a buy signal fwiw
+                        vwap: `The vwap is currently ${ticker.currentVwap}, it was ${ticker.prevDayVwap} yesterday, it was ${ticker.prevMinVwap} in the past minute`,
+                        //TODO: calculate current price as a delta% of the below values
+                        highOfDay: `${ticker.highOfDay}`,
+                        lowOfDay: `${ticker.lowOfDay}`,
+                        prevClosePrice: `${ticker.prevDayClose}`
                         //TODO: We should definitely include a way to denote which datasource this information is coming from
                     }
                 });
@@ -82,7 +92,15 @@ export class TopGainerNotificationStockWorker extends StockWorker {
                 // })
 
             } else {
-                //no-op
+                // We need to see if we are missing out on good buys
+                return this.notification.notify({
+                    message: `${ticker.ticker} would not alert, it is ${changePercent.persuasion} ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
+                    additionaData: {
+                        exchange: this.exchange.constructor.name,
+                        receiveTime: new Date().toISOString(),
+                        currentPrice: ticker.price,
+                    }
+                });
             }
         })
     }
