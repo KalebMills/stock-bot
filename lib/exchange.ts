@@ -99,8 +99,10 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     initialize(): Promise<void> {
-        this.logger.log(LogLevel.INFO, color.green(`${this.constructor.name}#initialize():SUCCESS`))
-        return Promise.resolve();
+        return Promise.resolve()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, color.green(`${this.constructor.name}#initialize():SUCCESS`));
+        })
     }
 
     close(): Promise<void> {

@@ -1,6 +1,7 @@
 import redis from 'ioredis';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import { NotFoundError } from './exceptions';
+import * as color from 'chalk'
 
 //TODO: Perhaps find a more robust way to truly type this rather than using `any`
 export type BaseDataStoreObject = { [key: string]: BaseDataStoreObject | any };
@@ -9,6 +10,9 @@ export interface DataStoreObject<T = any> {
     [key: string]: BaseDataStoreObject | T | any;
 }
 
+export interface BaseDataStoreOptions {
+    logger: Logger;
+}
 
 export interface IDataStore<TInput = DataStoreObject, TOutput = DataStoreObject> extends IInitializable, ICloseable {
     save(key: string, data: TInput): Promise<TOutput>;
@@ -17,11 +21,10 @@ export interface IDataStore<TInput = DataStoreObject, TOutput = DataStoreObject>
 }
 
 
-export interface RedisDataStoreOptions {
+export interface RedisDataStoreOptions extends BaseDataStoreOptions {
     port?: number;
     host: string;
     options?: redis.RedisOptions;
-    logger: Logger;
 }
 
 export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutput> {
@@ -40,14 +43,14 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
             this.logger.log(LogLevel.INFO, `Connected to Redis on ${this.options.host}:${this.port}`);
-        });
+        });``
     }
 
-    save(key: string, data: DataStoreObject): Promise<DataStoreObject> {
+    save(key: string, data: TInput): Promise<TOutput[]> {
         return this.client.hmset(key, data)
         .then(() => {
             this.logger.log(LogLevel.TRACE, `${key} was saved in Redis`);
-            return data;
+            return data as TOutput[];
         });
     } 
 
@@ -92,24 +95,29 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
             this.client.disconnect();
             return Promise.resolve();
         } catch (e) {
-            throw e;
+            return Promise.reject(e);
         }
     }
 }
 
 export class MemoryDataStore implements IDataStore {
     private store: DataStoreObject;
+    private logger: Logger;
 
-    constructor() {
+    constructor(options: BaseDataStoreOptions) {
         this.store = {};
+        this.logger = options.logger;
     }
 
     initialize(): Promise<void> {
-        return Promise.resolve();
+        return Promise.resolve()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, color.green(`${this.constructor.name}#initialize():SUCCESS`))
+        })
     }
 
     save(key: string, data: DataStoreObject): Promise<DataStoreObject> {
-        this.store[key] = data;
+        this.store[key] = JSON.stringify(data);
         return Promise.resolve(data);
     }
 
@@ -119,10 +127,11 @@ export class MemoryDataStore implements IDataStore {
             if (this._hasWildCard(key)) {
                 return this._fetchWildCardValues(key);
             } else {
-                return Promise.resolve([this.store[key]]);
+                return Promise.resolve([JSON.parse(this.store[key])]);
             }
         } else {
-            throw new NotFoundError(`${key} not found`);
+            return Promise.resolve([])
+            // return Promise.reject(new NotFoundError(`${key} not found`));
         }
     }
     

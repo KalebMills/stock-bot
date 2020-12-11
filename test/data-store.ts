@@ -1,4 +1,4 @@
-import { MemoryDataStore, RedisDataStore } from '../lib/data-store';
+import { DataStoreObject, MemoryDataStore, RedisDataStore } from '../lib/data-store';
 import { inCI, runCmd } from '../lib/util';
 import * as chai from 'chai';
 import { DefaultError, isErrorType, NotFoundError } from '../lib/exceptions';
@@ -8,17 +8,22 @@ import winston from 'winston';
 const CONSTRUCT_DOCKER_REDIS = () => runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
 const DESTORY_DOCKER_REDIS = () => runCmd('docker rm -f TEST_REDIS_DB');
 
+const logger = winston.createLogger({
+    transports: [ new winston.transports.Console() ]
+})
 
 
 describe('#MemoryDataStore', () => {
     const TEST_KEY = 'TEST_KEY';
-    const TEST_DATA = {
+    const TEST_DATA = [{
         'test': 'data'
-    };
+    }];
     let store: MemoryDataStore;
     
     it('Can construct MemoryDataStore', () => {
-        store = new MemoryDataStore();
+        store = new MemoryDataStore({
+            logger
+        });
         chai.assert.instanceOf(store, MemoryDataStore);
     });
 
@@ -57,11 +62,11 @@ describe('#MemoryDataStore', () => {
 });
 
 describe('#RedisDataStore', () => {
-    let store: RedisDataStore;
+    let store: RedisDataStore<DataStoreObject, DataStoreObject>;
     const TEST_KEY: string = uuid.v4();
-    const TEST_DATA = {
+    const TEST_DATA = [{
         'TEST': 'DATA'
-    };
+    }];
 
     if (!inCI()) {
         before(() => CONSTRUCT_DOCKER_REDIS());

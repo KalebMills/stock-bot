@@ -11,11 +11,14 @@ export interface INotification<T = NotificationOptions> extends IInitializable, 
     notify(data: T): Promise<void>;
 }
 
+export interface BaseNotificationOptions {
+    logger: Logger;
+}
 
-export interface DiscordNotificationOptions {
+
+export interface DiscordNotificationOptions extends BaseNotificationOptions {
     guildId: string;
     token: string;
-    logger: Logger;
 }
 
 
@@ -75,12 +78,17 @@ export class DiscordNotification implements INotification {
 }
 
 export class PhonyNotification implements INotification {
-    constructor() {
+    private logger: Logger;
 
+    constructor(options: BaseNotificationOptions) {
+        this.logger = options.logger;
     }
 
     initialize(): Promise<void> {
-        return Promise.resolve();
+        return Promise.resolve()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
+        })
     }
 
     notify(msg: NotificationOptions): Promise<void> {

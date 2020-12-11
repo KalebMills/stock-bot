@@ -48,7 +48,9 @@ class FakeDatasource extends D.DataSource {
     }
 }
 const datasource = new FakeDatasource(baseOptions);
-const dataStore = new data_store_1.PhonyDataStore();
+const dataStore = new data_store_1.PhonyDataStore({
+    logger
+});
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
 const exchange = new exchange_1.AlpacasExchange({
     logger,
@@ -63,7 +65,9 @@ const exchange = new exchange_1.AlpacasExchange({
         type: 'percent'
     }
 });
-const notification = new N.PhonyNotification();
+const notification = new N.PhonyNotification({
+    logger
+});
 const serviceOptions = {
     concurrency: 1,
     logger,
@@ -114,6 +118,7 @@ describe('#StockWorker', () => {
             dataStore,
             notification,
             exchange,
+            dataSource: datasource,
             exceptionHandler: (err) => { }
         });
         assert.strictEqual(worker instanceof workers_1.TopGainerNotificationStockWorker, true);

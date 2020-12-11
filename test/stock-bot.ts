@@ -20,7 +20,7 @@ const baseOptions: D.IDataSourceOptions = {
     })
 }
 
-class FakeDatasource extends D.DataSource {
+class FakeDatasource extends D.DataSource<ITickerChange> {
     constructor(options: D.IDataSourceOptions) {
         super(options);
     }
@@ -32,7 +32,9 @@ class FakeDatasource extends D.DataSource {
 
 const datasource = new FakeDatasource(baseOptions);
 
-const dataStore = new PhonyDataStore();
+const dataStore = new PhonyDataStore({
+    logger
+});
 
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
 const exchange = new AlpacasExchange({
@@ -49,7 +51,9 @@ const exchange = new AlpacasExchange({
     }
 });
 
-const notification = new N.PhonyNotification();
+const notification = new N.PhonyNotification({
+    logger
+});
 
 const serviceOptions: IStockServiceOptions = {
     concurrency: 1,
@@ -105,6 +109,7 @@ describe('#StockWorker', () => {
             dataStore,
             notification,
             exchange,
+            dataSource: datasource,
             exceptionHandler: (err: Error) => {}
         });
         assert.strictEqual(worker instanceof TopGainerNotificationStockWorker, true);

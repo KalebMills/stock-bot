@@ -35,7 +35,6 @@ export interface IDataSourceOptions {
 export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     readonly validationSchema: joi.Schema;
     logger: Logger;
-
     timedOutTickers: Map<string, U.IDeferredPromise>;
 
     constructor(options: IDataSourceOptions) {
@@ -259,21 +258,27 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         //Once close is called, only resolve the method call once the final ticker is unsubscribed from
         this.emitter.on('UNSUBSCRIBED', () => this.closePromise.resolve());
         //Handle all incoming quotes
-        this.emitter.on('QUOTE', this._quoteHandler);
+        this.emitter.on('QUOTE', data => {
+            this._quoteHandler(data)
+        });
     }
 
     initialize(): Promise<void> {
-        return this.initializePromise.promise;
+        return this.initializePromise.promise
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
+        });
     }
 
     scrapeDatasource(): Promise<QuoteEvent[]> {
         const outputData: QuoteEvent[] = [...this.data];
         
-        console.log(`${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
+        this.logger.log(LogLevel.INFO, `outputData has ${Object.keys(outputData).length} values in it`)
         // Remove returned values from the current outputData array;
-        // this.data = this.data.filter(obj => {
-        //     return !outputData.includes(obj);
-        // });
+        this.data = this.data.filter(obj => {
+            return !outputData.includes(obj);
+        });
 
         return Promise.resolve(outputData);
     }
@@ -314,7 +319,8 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
                 break;
             case "Q":
                 // console.log(JSON.stringify(data))
-                this.emitter.emit('QUOTE', data);
+                // this.emitter.emit('QUOTE', data);
+                this._quoteHandler(data)
                 break;
 
             default:
@@ -323,6 +329,7 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     }
 
     _quoteHandler = (data: QuoteEvent) => {
+        // this.logger.log(LogLevel.INFO, `QUOTE: ${JSON.stringify(data)}`)
         this.data.push(data);
     }
 

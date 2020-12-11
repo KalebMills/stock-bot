@@ -175,9 +175,9 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
         
     */
     process(currQuote: QuoteEvent): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(currQuote)})`);
         const ran = uuid.v4();
         //Now we actually decide what to do with it
-        
         return this.datastore.get(currQuote.sym) //Fetch the previous quote
         .then(data => data as unknown as QuoteEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: QuoteEvent[]) => {
@@ -205,10 +205,13 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
                 }
             }
         })
+        .catch(err => {
+            this.logger.log(LogLevel.ERROR, `Caught an error, swallowing: ${JSON.stringify(err)}`)
+        })
         .then(() => {
             this.logger.log(LogLevel.INFO, `Completed process()`);
         })
-        .finally(() => this.datastore.save(currQuote.sym, currQuote).then(() => this.datasource.timeoutTicker(currQuote.sym, 60000 * 3))); //Timeout each ticker for 3 minutes
+        .finally(() => this.datastore.save(currQuote.sym, currQuote).then(() => this.datasource.timeoutTicker(currQuote.sym, 180))); //Timeout each ticker for 3 minutes
     }
 
     /**

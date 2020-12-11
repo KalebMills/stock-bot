@@ -30,14 +30,19 @@ const uuid = __importStar(require("uuid"));
 const winston_1 = __importDefault(require("winston"));
 const CONSTRUCT_DOCKER_REDIS = () => util_1.runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
 const DESTORY_DOCKER_REDIS = () => util_1.runCmd('docker rm -f TEST_REDIS_DB');
+const logger = winston_1.default.createLogger({
+    transports: [new winston_1.default.transports.Console()]
+});
 describe('#MemoryDataStore', () => {
     const TEST_KEY = 'TEST_KEY';
-    const TEST_DATA = {
-        'test': 'data'
-    };
+    const TEST_DATA = [{
+            'test': 'data'
+        }];
     let store;
     it('Can construct MemoryDataStore', () => {
-        store = new data_store_1.MemoryDataStore();
+        store = new data_store_1.MemoryDataStore({
+            logger
+        });
         chai.assert.instanceOf(store, data_store_1.MemoryDataStore);
     });
     it('Can initialize MemoryDataStore', () => {
@@ -71,9 +76,9 @@ describe('#MemoryDataStore', () => {
 describe('#RedisDataStore', () => {
     let store;
     const TEST_KEY = uuid.v4();
-    const TEST_DATA = {
-        'TEST': 'DATA'
-    };
+    const TEST_DATA = [{
+            'TEST': 'DATA'
+        }];
     if (!util_1.inCI()) {
         before(() => CONSTRUCT_DOCKER_REDIS());
         after(() => DESTORY_DOCKER_REDIS());
