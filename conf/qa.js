@@ -42,7 +42,7 @@ const exchange = new PhonyExchange({
 });
 
 const notification = new DiscordNotification({
-    guildId: 'GUILD_ID',
+    guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
     token: (process.env['DISCORD_API_TOKEN'] || "")
 });
