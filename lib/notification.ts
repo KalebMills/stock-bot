@@ -3,8 +3,11 @@ import * as discord from 'discord.js';
 import * as winston from 'winston';
 
 export interface NotificationOptions {
+    ticker: string;
     message: string;
-    additionaData: { [key: string]: string | number}
+    additionaData?: { [key: string]: string | number }
+    price?: number;
+    volume?: number;
 }
 
 export interface INotification<T = NotificationOptions> extends IInitializable, ICloseable {
@@ -53,10 +56,35 @@ export class DiscordNotification implements INotification {
         return this.client.guilds.fetch(this.guildId, undefined, true)
         .then(guild => {
             const channel = guild.systemChannel;
-            console.log(`channel: ${channel}`)
             if (channel) {
-                return channel.send(`
-                \`${message.message}\` \nAdditional Information: \`\`\`json\n${JSON.stringify(message.additionaData)}\`\`\``).then(() => {
+                // const embed = new discord.MessageEmbed({
+                //     title: `Ticker Notification`,
+                //     color: 'green',
+                //     createdAt: new Date()
+                // });
+
+                const embed = new discord.MessageEmbed()
+                .setColor('#8030ff')
+                .setTitle(message.ticker)
+                .setDescription(`**${message.message}**`)
+                .setTimestamp()
+                .setFooter('StockBot', 'https://icon2.cleanpng.com/20180402/xww/kisspng-chart-graph-of-a-function-infographic-information-stock-market-5ac2c6f186ff53.663225121522714353553.jpg');
+
+                if (message.price) {
+                    embed.addField('Price', `$${message.price}`, true);
+                }
+
+                if (message.volume) {
+                    embed.addField('Volume', message.volume, true);
+                }
+
+                if (message.additionaData) {
+                    Object.keys(message.additionaData).forEach(key => {
+                        embed.addField(key, message.additionaData![key]);
+                    });
+                }
+
+                return channel.send(embed).then(() => {
                     this.logger.log(LogLevel.TRACE, 'Sent message into system channel');
                 });
             } else {
