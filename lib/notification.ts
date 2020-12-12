@@ -57,11 +57,6 @@ export class DiscordNotification implements INotification {
         .then(guild => {
             const channel = guild.systemChannel;
             if (channel) {
-                // const embed = new discord.MessageEmbed({
-                //     title: `Ticker Notification`,
-                //     color: 'green',
-                //     createdAt: new Date()
-                // });
 
                 const embed = new discord.MessageEmbed()
                 .setColor('#8030ff')
