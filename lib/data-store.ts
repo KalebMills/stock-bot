@@ -46,11 +46,11 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
         });``
     }
 
-    save(key: string, data: TInput): Promise<TOutput[]> {
-        return this.client.hmset(key, data)
+    save(key: string, data: TInput): Promise<TOutput> {
+        return this.client.hmset(key, data as DataStoreObject) //This because it satisfies Redis, and this is a Generic Object type
         .then(() => {
             this.logger.log(LogLevel.TRACE, `${key} was saved in Redis`);
-            return data as TOutput[];
+            return data as unknown as TOutput;
         });
     } 
 
