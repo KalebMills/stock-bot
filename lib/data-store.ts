@@ -43,7 +43,7 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
             this.logger.log(LogLevel.INFO, `Connected to Redis on ${this.options.host}:${this.port}`);
-        });``
+        });
     }
 
     save(key: string, data: TInput): Promise<TOutput> {
