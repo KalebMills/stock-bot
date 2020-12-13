@@ -1,10 +1,12 @@
 const joi = require('joi');
-const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
+const { PolygonLiveDataSource } = require('../lib/data-source');
+const { MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
 const { DiscordNotification } = require('../lib/notification');
-const { TopGainerNotificationStockWorker } = require('../lib/workers');
+const { LiveDataStockWorker } = require('../lib/workers');
+const fs = require('fs');
 
 const logger = winston.createLogger({
     transports: [
@@ -30,42 +32,59 @@ const StockTickerSchema = joi.object({
     })
 }).required();
 
-const datasourceOptions = {
-    logger,
-    validationSchema: StockTickerSchema
+const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
+
+let t = []
+
+for (let ticker of data) {
+    t.push(ticker);
 }
 
-const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
+const datasourceOptions = {
+    logger,
+    //This because we will be processing QuoteEvent
+    //TODO: This needs to be changed to be an abstract method of the DataSource class
+    validationSchema: joi.object({}),
+    subscribeTicker: t
+}
 
-const exchange = new PhonyExchange({
+const datasource = new PolygonLiveDataSource(datasourceOptions);
+const datastore = new MemoryDataStore({
     logger
+});
+
+//NOTE: Using this exchange because we only want this to run during market hours
+
+const exchange = new AlpacasExchange({
+    logger,
+    keyId: (process.env['ALPACAS_API_KEY'] || ""),
+    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
+    acceptableGain: {
+        unit: 3,
+        type: 'percent'
+    },
+    acceptableLoss: {
+        unit: 2,
+        type: 'percent'
+    }
 });
 
 const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
-    token: (process.env['DISCORD_API_TOKEN'] || "")
+    token: (process.env['DISCORD_API_KEY'] || "")
 });
 
 const serviceOptions = {
-    concurrency: 1,
+    concurrency: 5,
     logger,
     workerOptions: {
-        tickTime: 1000
+        tickTime: 0
     },
     datasource,
+    datastore,
     exchange,
-    mainWorker: TopGainerNotificationStockWorker,
-    purchaseOptions: {
-        takeProfitPercentage: .015,
-        stopLimitPercentage: .05,
-        maxShareCount: 100,
-        maxSharePrice: 20.00, //TODO: While we aren't using Alpaca to do the trading, let's simply make it this so we can get more tickers to look at manually on Robinhood
-        prevStockPriceOptions: {
-            unit: 1,
-            measurement: "hour"
-        }
-    },
+    mainWorker: LiveDataStockWorker,
     notification
 };
 

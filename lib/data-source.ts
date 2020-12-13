@@ -233,6 +233,7 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         super(options);
         this.emitter = new EventEmitter();
         //TODO: If needed, later on we can require the caller to append the required *.TICKER prefix to allow this for more robust usage
+        //TODO: Note, this seems like it should be changed to use TradeEvent, since it's more accurate as it pertains to what people are actually paying per share, since it's price is that of a historic nature
         this.subscribeTicker = options.subscribeTicker.map(ticker => `Q.${ticker}`);
         this.data = [];
         this.initializePromise = U.createDeferredPromise();
@@ -365,5 +366,29 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
                 this.polygonConn.close();
             });
         }
+    }
+}
+
+export class PhonyDataSource extends DataSource<QuoteEvent> {
+    
+    constructor(options: IDataSourceOptions){
+        super(options);
+    }
+
+    scrapeDatasource(): Promise<QuoteEvent[]> {
+        const QUOTE_EVENT: QuoteEvent = {
+            "ev": "Q",              // Event Type
+            "sym": "MSFT",          // Symbol Ticker
+            "bx": 4,                // Bix Exchange ID
+            "bp": 114.125,          // Bid Price
+            "bs": 100,              // Bid Size
+            "ax": 7,                // Ask Exchange ID
+            "ap": 114.128,          // Ask Price
+            "as": 160,              // Ask Size
+            "c": 0,                 // Quote Condition
+            "t": 1536036818784      // Quote Timestamp ( Unix MS )
+        }
+
+        return Promise.resolve([QUOTE_EVENT]);
     }
 }

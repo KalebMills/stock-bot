@@ -16,7 +16,7 @@ import { IDataStore } from './data-store';
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
     datastore: joi.required(), //TODO: Need a better way to type this
-    exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
+    exchange: joi.object().required(),  //TODO: Need a better way to type this
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
     mainWorker: joi.required(),    //TODO: Need a way to actually type this, though JS makes no differentiation between a function and constructor
     purchaseOptions: joi.object({
@@ -28,7 +28,7 @@ export const StockBotOptionsValidationSchema = joi.object({
             unit: joi.number().required(),
             measurement: joi.string().required()
         }).length(2).required()
-    }).length(5).required(),
+    }).length(5),
     //Worker Options
     concurrency: joi.number().required(),
     logger: joi.object().required(), //Winston is not actually a class,
@@ -122,8 +122,8 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         let marketIsOpen = (await this.exchange.isMarketTime());
 
         if(!marketIsOpen) {
-            this.logger.log(LogLevel.INFO, 'Market is currently closed. Delaying next try by 30 minutes.')
-            return BPromise.delay(30 * 60000).then(() => this.preProcess());
+            this.logger.log(LogLevel.INFO, 'Market is currently closed. Delaying next try by 5 minutes.')
+            return BPromise.delay(5 * 60000).then(() => this.preProcess());
         } // else continue
 
         if(this.processables.length > 0) {

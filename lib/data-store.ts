@@ -118,6 +118,10 @@ export class MemoryDataStore implements IDataStore {
 
     save(key: string, data: DataStoreObject): Promise<DataStoreObject> {
         try {
+            /*  
+                NOTE: This stores a reference to the passed in object. So any
+                change made to the object higher up is stored here as well.
+            */
             this.store[key] = data;
             return Promise.resolve(data);
         } catch (e) {

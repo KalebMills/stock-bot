@@ -201,6 +201,7 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
         .then(data => data as unknown as QuoteEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: QuoteEvent[]) => {
             if (!(data.length === 1)) {
+                this.logger.log(LogLevel.INFO, `No data in datastore for ${currQuote.sym}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
                 return Promise.resolve();
             } else {
@@ -210,9 +211,12 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
 
                 //If the change percent is greater than 2% per minute, notify
                 if (changePercentPerMinute > .02) {
+                    
                     //BUY
                     //Notify for now
                     return this.notification.notify({
+                        ticker: currQuote.sym,
+                        price: currQuote.ap,
                         message: `Ticker ${currQuote.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
                         additionaData: {
                             exchange: this.exchange.constructor.name,
@@ -221,6 +225,7 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
                         }
                     });
                 } else {
+                    this.logger.log(LogLevel.INFO, `${currQuote.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currQuote, prevQuote)}`)
                     return;
                 }
             }
