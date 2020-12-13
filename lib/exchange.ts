@@ -128,7 +128,10 @@ export class PhonyExchange implements Exchange<string, string, string> {
     }
 
     initialize(): Promise<void> {
-        return Promise.resolve();
+        return Promise.resolve()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#intiialize():SUCCESS`);
+        })
     }
 
     buy(something: string): Promise<string> {

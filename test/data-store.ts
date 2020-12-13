@@ -15,9 +15,9 @@ const logger = winston.createLogger({
 
 describe('#MemoryDataStore', () => {
     const TEST_KEY = 'TEST_KEY';
-    const TEST_DATA = [{
+    const TEST_DATA = {
         'test': 'data'
-    }];
+    };
     let store: MemoryDataStore;
     
     it('Can construct MemoryDataStore', () => {
@@ -32,18 +32,29 @@ describe('#MemoryDataStore', () => {
     });
 
     it('Can save data in MemoryDataStore', () => {
-        const data = {
-            'test': 'data'
-        };
-
         return store.save(TEST_KEY, TEST_DATA);
     });
 
     it('Can get data from MemoryDataStore', () => {
         return store.get(TEST_KEY)
         .then(data => {
-            chai.assert.deepEqual(data, TEST_DATA);
+            chai.assert.deepEqual(data, [ TEST_DATA ]);
         });
+    });
+
+    it('Can save lots of data in the MemoryDataStore', () => {
+        let promises: Promise<any>[] = [];
+        for (let i = 1; i <= 1000; i++) {
+            let key = uuid.v4();
+            let val = uuid.v4();
+            promises.push(store.save(key, { val }))
+        }
+        return Promise.all(promises);
+    });
+
+    it('Has the expected number of keys', () => {
+        return store.get("*")
+        .then(data => chai.assert.equal(data.length, 1001));
     });
 
     it('Can delete data in MemoryDataStore', () => {

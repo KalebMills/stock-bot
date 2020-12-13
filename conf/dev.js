@@ -32,7 +32,7 @@ const StockTickerSchema = joi.object({
     })
 }).required();
 
-const data = fs.readFileSync(path.join(__dirname, '..', '..', 'tickers.txt')).toString().split('\n');
+const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
 
 // let t = ['APPL', 'TSLA', 'AMZN', 'ABNB', 'DASH'];
 let t = []
@@ -62,7 +62,7 @@ const notification = new PhonyNotification({
 });
 
 const serviceOptions = {
-    concurrency: 50,
+    concurrency: 1,
     logger,
     workerOptions: {
         tickTime: 1000

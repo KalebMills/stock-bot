@@ -5,20 +5,14 @@ import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
-import * as Alpacas from '@master-chief/alpaca';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import BPromise, { reject } from 'bluebird';
+import BPromise from 'bluebird';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
 import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
-import * as winston from 'winston';
-import * as fs from 'fs';
-import { MemoryDataStore } from './data-store';
 import { QuoteEvent } from './workers';
-import * as uuid from 'uuid';
-import { Quote } from '@master-chief/alpaca/types/entities';
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
     timedOutTickers: Map<string, U.IDeferredPromise>;
@@ -223,16 +217,19 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     private subscribeTicker: string[];
     private initializePromise: U.IDeferredPromise;
     private closePromise: U.IDeferredPromise;
+    private apiKey: string;
     
     constructor(options: IPolygonLiveDataSourceOptions) {
         super(options);
         this.emitter = new EventEmitter();
+        //TODO: If needed, later on we can require the caller to append the required *.TICKER prefix to allow this for more robust usage
         this.subscribeTicker = options.subscribeTicker.map(ticker => `Q.${ticker}`);
         this.data = [];
         this.initializePromise = U.createDeferredPromise();
         this.closePromise = U.createDeferredPromise();
         this.scrapeUrl = "wss://socket.polygon.io/stocks";
         this.polygonConn = new WebSocket(this.scrapeUrl);
+        this.apiKey = (process.env['ALPACAS_API_KEY'] || "");
 
         //Event Handlers
         //Our generic message handler for incoming messages
@@ -264,6 +261,10 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     }
 
     initialize(): Promise<void> {
+        if (!this.apiKey) {
+            return Promise.reject(new InvalidDataError(`ALPACAS_API_KEY environment variable required for ${this.constructor.name}`));
+        }
+
         return this.initializePromise.promise
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
@@ -273,8 +274,8 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     scrapeDatasource(): Promise<QuoteEvent[]> {
         const outputData: QuoteEvent[] = [...this.data];
         
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
-        this.logger.log(LogLevel.INFO, `outputData has ${Object.keys(outputData).length} values in it`)
+        // this.logger.log(LogLevel.INFO, `${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
+        // this.logger.log(LogLevel.INFO, `outputData has ${Object.keys(outputData).length} values in it`)
         // Remove returned values from the current outputData array;
         this.data = this.data.filter(obj => {
             return !outputData.includes(obj);
@@ -287,7 +288,6 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         switch(data.status) {
             case 'connected':
                 this.emitter.emit('CONNECTED', this.emitter);
-                this.logger.log(LogLevel.INFO, `Connected to ${this.scrapeUrl}`);
                 break;
             case 'auth_success':
                 this.emitter.emit('AUTHENTICATED', this.emitter);
@@ -319,8 +319,9 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
                 break;
             case "Q":
                 // console.log(JSON.stringify(data))
-                // this.emitter.emit('QUOTE', data);
-                this._quoteHandler(data)
+                //TODO: NOTE removing this emitter seemed to fix the blocking problem we had last time, and instead just calling the quote handler directly
+                this.emitter.emit('QUOTE', data);
+                // this._quoteHandler(data)
                 break;
 
             default:
@@ -334,62 +335,25 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     }
 
     close(): Promise<void> {
-        this.polygonConn.send(JSON.stringify({
-            "action": "unsubscribe",
-            "params": this.subscribeTicker.join(',')
-        }));
-
-
-        return this.closePromise.promise
-        .then(() => {
-            this.polygonConn.close();
-        });
+        if (this.polygonConn.CLOSED || this.polygonConn.CLOSING || this.polygonConn.CONNECTING) {
+            try {
+                this.polygonConn.close();
+                return Promise.resolve();
+            } catch (e) {
+                //We know sometimes the WebSocket connection won't be connected, and will throw an error
+                return Promise.resolve();
+            }
+        } else {
+            this.polygonConn.send(JSON.stringify({
+                "action": "unsubscribe",
+                "params": this.subscribeTicker.join(',')
+            }));
+    
+    
+            return this.closePromise.promise
+            .then(() => {
+                this.polygonConn.close();
+            });
+        }
     }
 }
-
-
-// const data = fs.readFileSync(p.join(__dirname, '..', '..', 'tickers.txt')).toString();
-
-// let tickers = []
-
-// for (let line of data.split('\n')) {
-//     tickers.push(line);
-// }
-
-
-// const np = new PolygonLiveDataSource({
-//     logger: winston.createLogger({
-//         transports: [new winston.transports.Console()]
-//     }),
-//     subscribeTicker: tickers,
-//     validationSchema: joi.object({})
-// })
-
-// const store = new MemoryDataStore();
-
-
-// np.initialize()
-// .then(() => new Promise((resolve, reject) => {
-//     setTimeout(() => resolve(), 10000);
-// }))
-// .then(() => np.scrapeDatasource())
-// .then(d => {
-//     const ran = uuid.v4();
-//     const p: Promise<any>[] = [];
-//     d.forEach(val => {
-//         let promise = store.save(`${val.sym}-${ran}`, val);
-//         p.push(promise);
-//     });
-
-//     return Promise.all(p).then(() => d);
-// })
-// .then(data => {
-//     console.log(`${store.constructor.name}#store has ${Object.keys(store['store']).length} keys in it`)
-//     return store.get('A*')
-//     .then(d2 => {
-//         console.log(JSON.stringify(d2))
-//         return d2;
-//     })
-// })
-// .then(data => console.log(JSON.stringify(data)))
-// .finally(() => np.close())

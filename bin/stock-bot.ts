@@ -13,5 +13,10 @@ if (error || errors) {
     console.error(color.red(`An error occurred when loading StockService configuration: ${error} -- ${errors}`))
 } else {
     const service = new StockService(config);
-    service.initialize().then(() => console.log(color.green('StockService#initialize():SUCCESS')));
+    service.initialize()
+    .then(() => console.log(color.green('StockService#initialize():SUCCESS')))
+    .catch(err => {
+        console.log(color.red(`An unhandled error occurred, ${err}`));
+        return service.close();
+    });
 }

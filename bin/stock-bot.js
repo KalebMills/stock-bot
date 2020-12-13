@@ -14,5 +14,10 @@ if (error || errors) {
 }
 else {
     const service = new stock_bot_1.StockService(config);
-    service.initialize().then(() => console.log(chalk_1.default.green('StockService#initialize():SUCCESS')));
+    service.initialize()
+        .then(() => console.log(chalk_1.default.green('StockService#initialize():SUCCESS')))
+        .catch(err => {
+        console.log(chalk_1.default.red(`An unhandled error occurred, ${err}`));
+        return service.close();
+    });
 }

@@ -79,6 +79,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     datasource: IDataSource;
     datastore: IDataStore;
     notification: INotification;
+    _preProcessDataFetchBackOffPromise: Promise<any> | null;   
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -89,10 +90,11 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         this.purchaseOptions = options.purchaseOptions;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
         this.mainWorker = options.mainWorker;
+        this._preProcessDataFetchBackOffPromise = Promise.resolve();
     }
 
     initialize(): Promise<void> {
-        return Promise.all([ this.datasource.initialize(), this.exchange.initialize(), this.notification.initialize() ])
+        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize() ])
         .then(() => super.initialize())
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
@@ -102,17 +104,11 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     fetchWork = (): Promise<ITickerChange[]> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#fetchWork():CALLED`);
         return this.datasource.scrapeDatasource()
-        .then(tickers => {
-            //Filters out tickers that are already timed out, and tickers who's price per share is above our threshold
-            //TODO: We should look into this. This code seems to be duplicated all through this Bot, and should be able to be condensed to one spot. If nothing else, the code should become a function.  
-            const keys = Array.from(this.datasource.timedOutTickers.keys());     
-            return tickers.filter((tkr: ITickerChange) => !keys.includes(tkr.ticker));
-        })
         .catch((err: Error) => {
             this.logger.log(LogLevel.ERROR, JSON.stringify(err), err)
             this.logger.log(LogLevel.ERROR, `Failed to scrape data source, backing off and retrying`);
             return promiseRetry(() => this.fetchWork());
-        })
+        });
     }
 
 
@@ -131,19 +127,18 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         } // else continue
 
         if(this.processables.length > 0) {
-            let ticker = this.processables[0];
+            let ticker = this.processables.shift()!;
             //@ts-ignore
             this.datasource.timeoutTicker(ticker.sym); //TODO: This assumes the ITickerChange structure, which is not correct
 
-
-            this.logger.log(LogLevel.TRACE, `Taking ${JSON.stringify(ticker)} out of this.processables, pushing ticker to this.process(${JSON.stringify(ticker)})`)
+            // this.logger.log(LogLevel.TRACE, `Taking ${JSON.stringify(ticker)} out of this.processables, pushing ticker to this.process(${JSON.stringify(ticker)})`);
             //Now update what is processable
             const keys = Array.from(this.datasource.timedOutTickers.keys());     
             //@ts-ignore
             this.processables = this.processables.filter((tkr: ITickerChange) => !keys.includes(tkr.sym));
             return Promise.resolve(ticker);
         } else {
-            this.logger.log(LogLevel.INFO, `this.processables.length = ${this.processables.length}`);
+            // this.logger.log(LogLevel.INFO, `this.processables.length = ${this.processables.length}`);
             //Resupply the the work array, and try to process work again
             return this.fetchWork()
             .then((tickers: ITickerChange[]) => {
@@ -170,17 +165,16 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
                         return Promise.all(pendingPromises)
                         .then(() => this.preProcess());
                     } else {
-                        //TODO: Instead of immediately trying to scrape, we should create a "backoffPromise" that is just a setTimeout, and we should check if it is present instead. This way, all workers can be on the same backoff as well
-                        this.logger.log(LogLevel.INFO, `We are currently on a backoff of 5 seconds to refetch new tickers.`);
+                        this.logger.log(LogLevel.INFO, `this.processables.length = 0, return the backoff promise`);
                         return BPromise.delay(5000).then(() => this.preProcess())
                     }
                 } else {
-                    this.logger.log(LogLevel.TRACE, `Nothing in this.processables, instead retrying this.preProcess()`)
+                    this.logger.log(LogLevel.INFO, `Nothing in this.processables, instead retrying this.preProcess()`);
                     return this.preProcess();
                 }
             })
             .catch(err => {
-                this.logger.log(LogLevel.ERROR, `Error caught in preprocess -> ${err}`);
+                this.logger.log(LogLevel.ERROR, `this.preProcess():ERROR -> ${err}`);
                 throw err;
             });
         }

@@ -156,15 +156,16 @@ export interface QuoteEvent {
 
 
 export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
-    // datastore: IDataStore<QuoteEvent, DataStoreObject<QuoteEvent>>;
 
     constructor(options: IStockeWorkerOptions<QuoteEvent, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
-        // this.datastore = options.dataStore;
     }
 
     initialize(): Promise<void> {
-        return super.initialize();
+        return super.initialize()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
+        });
     }
 
     /*
@@ -176,20 +177,20 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
     */
     process(currQuote: QuoteEvent): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(currQuote)})`);
-        const ran = uuid.v4();
-        //Now we actually decide what to do with it
+
         return this.datastore.get(currQuote.sym) //Fetch the previous quote
         .then(data => data as unknown as QuoteEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: QuoteEvent[]) => {
             if (!(data.length === 1)) {
-                throw new exception.InvalidDataError(`Unexpected number of keys returned from ${this.datastore.constructor.name}#get(${currQuote.sym}): LENGTH=${data.length}`);
+                //This is the first receive for a ticker, skip the analysis and just store this event in the DB
+                return Promise.resolve();
             } else {
                 const [prevQuote]: QuoteEvent[] = data;
                 const changePercentPerMinute = this._getChangePercentPerMinute(currQuote, prevQuote);
                 
 
                 //If the change percent is greater than 2% per minute, notify
-                if (changePercentPerMinute > .2) {
+                if (changePercentPerMinute > .02) {
                     //BUY
                     //Notify for now
                     return this.notification.notify({
@@ -205,9 +206,6 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
                 }
             }
         })
-        .catch(err => {
-            this.logger.log(LogLevel.ERROR, `Caught an error, swallowing: ${JSON.stringify(err)}`)
-        })
         .then(() => {
             this.logger.log(LogLevel.INFO, `Completed process()`);
         })
@@ -222,7 +220,7 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
 
     private _getChangePercentPerMinute (currQuote: QuoteEvent, prevQuote: QuoteEvent): number {
         // This gets the difference between the two quotes, and get's the % of that change of a share price. i.e (11 - 10) / 11 = 10%;
-        const changePercent = ((currQuote.ap - prevQuote.ap) / currQuote.ap) * 100;
+        const changePercent = ((currQuote.ap - prevQuote.ap) / currQuote.ap);
         //Gets time difference in seconds, and translate to minutes
         const timeDifferenceInMinutes = (currQuote.t - prevQuote.t) / 60;
 

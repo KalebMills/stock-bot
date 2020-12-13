@@ -1,7 +1,7 @@
 import redis from 'ioredis';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import { NotFoundError } from './exceptions';
-import * as color from 'chalk'
+import color from 'chalk'
 
 //TODO: Perhaps find a more robust way to truly type this rather than using `any`
 export type BaseDataStoreObject = { [key: string]: BaseDataStoreObject | any };
@@ -117,21 +117,23 @@ export class MemoryDataStore implements IDataStore {
     }
 
     save(key: string, data: DataStoreObject): Promise<DataStoreObject> {
-        this.store[key] = JSON.stringify(data);
-        return Promise.resolve(data);
+        try {
+            this.store[key] = data;
+            return Promise.resolve(data);
+        } catch (e) {
+            return Promise.reject(e);
+        }
     }
 
     get(key: string): Promise<DataStoreObject[]> {
-        //Note, this will only ever return a single value in the array
         if (this._has(key) || this._hasWildCard(key)) {
             if (this._hasWildCard(key)) {
                 return this._fetchWildCardValues(key);
             } else {
-                return Promise.resolve([JSON.parse(this.store[key])]);
+                return Promise.resolve([this.store[key]]);
             }
         } else {
-            return Promise.resolve([])
-            // return Promise.reject(new NotFoundError(`${key} not found`));
+            return Promise.resolve([]);
         }
     }
     
@@ -141,7 +143,7 @@ export class MemoryDataStore implements IDataStore {
     }
 
     _has(key: string): boolean {
-        return !!this.store.hasOwnProperty(key);
+        return this.store.hasOwnProperty(key);
     }
 
     _hasWildCard = (key: string) => {
@@ -153,8 +155,6 @@ export class MemoryDataStore implements IDataStore {
         const partialKey = key.replace('*', '');
         const options = Object.keys(this.store);
         const matches = options.filter(key => key.includes(partialKey));
-        console.log(`${matches.length} matches`)
-
         return Promise.resolve(matches.map(key => this.store[key]));
     }
 

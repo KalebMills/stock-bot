@@ -105,7 +105,6 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
                     logger: this.logger,
                     _preProcessor: this.preProcess
                 });
-                this.logger.log(LogLevel.INFO, `Spawned ${worker.constructor.name} Worker ${workerId}`);
                 this.workers.set(workerId, worker);
             }
         })
@@ -176,7 +175,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
 
     initialize(): Promise<void> {
         return Promise.resolve()
-        .then(() => this.logger.log(LogLevel.TRACE, `Worker ${this.id}#initialized():SUCCESS`))
+        .then(() => this.logger.log(LogLevel.TRACE, `Worker ${this.id}#initialize():SUCCESS`))
         .then(() => {})
     }
 
