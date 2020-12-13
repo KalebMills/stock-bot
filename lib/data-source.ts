@@ -182,7 +182,17 @@ export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> im
                         let stockObj: ITickerChange = {
                             ticker: snapshot.ticker,
                             price: snapshot.day.c!,
-                            percentChange: { percentChange, persuasion}
+                            percentChange: { percentChange, persuasion},
+                            currentVol: snapshot.day.v,
+                            currentVwap: snapshot.day.vw,
+                            openPrice: snapshot.day.o,
+                            highOfDay: snapshot.day.h,
+                            lowOfDay: snapshot.day.l,
+                            prevDayVol: snapshot.prevDay.v,
+                            prevDayVwap: snapshot.prevDay.vw,
+                            prevDayClose: snapshot.prevDay.c,
+                            prevMinVol: snapshot.min.v,
+                            prevMinVwap: snapshot.min.vw
                         };
                         tickers.push(stockObj)
                         this.logger.log(LogLevel.TRACE, `Ticker Scrape: ${stockObj.ticker} -- Price: ${stockObj.price} -- Change: ${stockObj.percentChange}`)

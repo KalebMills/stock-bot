@@ -74,11 +74,11 @@ const serviceOptions = {
     purchaseOptions: {
         takeProfitPercentage: .015,
         stopLimitPercentage: .05,
-        maxShareCount: 100,
-        maxSharePrice: 20.00, //TODO: While we aren't using Alpaca to do the trading, let's simply make it this so we can get more tickers to look at manually on Robinhood
+        maxShareCount: 20,
+        maxSharePrice: 100.00, //TODO: While we aren't using Alpaca to do the trading, let's simply make it this so we can get more tickers to look at manually on Robinhood
         prevStockPriceOptions: {
-            unit: 1,
-            measurement: "hour"
+            unit: 10,
+            measurement: "minute"
         }
     },
     notification

@@ -37,3 +37,4 @@ The flow of getting a feature or bug fix merged in is Github Issue -> PR -> Test
 | `CONFIG_FILE` | string | false | This points to a file in the `conf` folder, it is simply the file name, i.e `dev` |
 | `STOCK_LOG_DIR` | string | false | This is the directory to which the service should write logs to |
 | `DISCORD_API_KEY` | string | false | The token used for the `DiscordNotification` class |
+| ` DISCORD_GUILD_ID` | string | false | ID used to know which server to post to. This is required to use the `DiscordNotification` class |
