@@ -76,7 +76,7 @@ const notification = new DiscordNotification({
 });
 
 const serviceOptions = {
-    concurrency: 5,
+    concurrency: 10,
     logger,
     workerOptions: {
         tickTime: 0
