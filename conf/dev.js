@@ -1,6 +1,7 @@
 const joi = require('joi');
 const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
+const { PhonyDiagnostic } = require('../lib/diagnostic');
 const winston = require('winston');
 const { PhonyExchange } = require('../lib/exchange');
 const { PhonyNotification } = require('../lib/notification');
@@ -42,6 +43,7 @@ const exchange = new PhonyExchange({
 });
 
 const notification = new PhonyNotification();
+const diagnostic = new PhonyDiagnostic();
 
 const serviceOptions = {
     concurrency: 1,
@@ -50,6 +52,7 @@ const serviceOptions = {
         tickTime: 1000
     },
     datasource,
+    diagnostic,
     exchange,
     mainWorker: TopGainerNotificationStockWorker,
     purchaseOptions: {

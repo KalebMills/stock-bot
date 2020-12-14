@@ -1,13 +1,15 @@
 import { ICloseable, IInitializable, LogLevel, Logger } from "./base";
 import * as discord from 'discord.js';
-import { DiscordNotification } from "./notification";
 import { createLogger } from "winston";
-import { create } from "domain";
 
 
 interface DiagnosticLogOptions {
     level: LogLevel;
+    title: string;
     message: string;
+    additionalData?: {
+        [key: string]: string;
+    }
 }
 
 export interface IDiagnostic extends IInitializable, ICloseable {
@@ -18,18 +20,18 @@ export interface DiscordDiagnosticSystemOptions {
     token: string;
     logger: Logger;
     guildId: string;
-    channelId: string;
+    channelName: string;
 }
 
 /*
-    Larger TODO: We should add some command integration to check on CPU / Memory usage, tickers processed per minute, etc.
+    TODO: We should add some command integration to check on CPU / Memory usage, tickers processed per minute, etc.
 */
 
 export class DiscordDiagnosticSystem implements IDiagnostic {
     private client: discord.Client;
     private readonly token: string;
     private readonly guildId: string;
-    private readonly channelId: string;
+    private readonly channelName: string;
     private logger: Logger;
 
     constructor(options: DiscordDiagnosticSystemOptions) {
@@ -41,7 +43,7 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
         }
         this.logger = options.logger;
         this.guildId = options.guildId;
-        this.channelId = options.channelId;
+        this.channelName = options.channelName;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
@@ -53,28 +55,44 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
     }
 
     alert(options: DiagnosticLogOptions): Promise<void> {
-        const g = this.client.guilds.cache.get(this.guildId);
+        const { level, message, title, additionalData } = options;
+
+        const embed: discord.MessageEmbed = new discord.MessageEmbed()
+        .setTitle(title)
+        .setDescription(message)
+        .setTimestamp();
+
+        if (additionalData) {
+            for (let key in additionalData) {
+                embed.addField(key, additionalData[key]);
+            }
+        }
 
         return this.client.guilds.fetch(this.guildId, undefined, true)
         .then(guild => guild.channels)
-        .then(channels => channels.cache.find(c => c.name === this.channelId)!)
+        .then(channels => channels.cache.find(c => c.name === this.channelName)!)
         .then(channel => channel as discord.TextChannel)
         .then(channel => {
-            //TODO make this embed, then logic the colors below..
-            const msg = ''
+            //Set Color
+            switch(level) {
+                case LogLevel.ERROR:
+                    embed.setColor('#f00000'); //Red
+                    break;
+                case LogLevel.INFO:
+                    embed.setColor('#00eb04'); //Green
+                    break;
+                case LogLevel.WARN:
+                    embed.setColor('#ffbf00'); //Orange
+                    break;
+                default:
+                    embed.setColor('#4400ff'); //Burple
+                    break;
+            }
+            return channel.send(embed);
         })
-        .then(() => {})
-        // console.log(c);
-
-        console.log(`Channels = ${JSON.stringify(this.client.channels.cache.keys())}`)
-        // if (!!channel && !!(channel.type === 'text')) {
-        //     let c: discord.TextChannel = channel as discord.TextChannel;
-        //     return c.send('TEST').then(() => {})
-        // } else {
-        //     console.log(`!!channel = ${!!channel} ---- type = ${channel?.type}`)
-        // }
-
-        return Promise.resolve();
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#alert():SUCCESS`);
+        });
     }
 
 
@@ -90,19 +108,20 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
     }
 }
 
+export class PhonyDiagnostic implements IDiagnostic {
+    constructor() {
 
-let d = new DiscordDiagnosticSystem({
-    logger: createLogger(),
-    token: 'NzgwNTMwMzk1MTA3OTUwNjEy.X7wbkw.e5dm1DZXrVR4V02xNMVAfzAeZ5k',
-    guildId: '779466034192056350',
-    channelId: 'service-diagnostics'
-});
+    }
 
-d.initialize()
-.then(() => {
-    return d.alert({
-        level: LogLevel.INFO,
-        message: 'TEST'
-    })
-})
-.finally(() => d.close())
+    initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    alert(options: DiagnosticLogOptions): Promise<void> {
+        return Promise.resolve();
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
+    }
+}

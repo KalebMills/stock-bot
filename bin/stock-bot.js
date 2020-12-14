@@ -16,3 +16,6 @@ else {
     const service = new stock_bot_1.StockService(config);
     service.initialize().then(() => console.log(chalk_1.default.green('StockService#initialize():SUCCESS')));
 }
+//Catches unhandled Promise errors
+// process.on('unhandledRejection', () => {
+// })

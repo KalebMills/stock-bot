@@ -15,3 +15,8 @@ if (error || errors) {
     const service = new StockService(config);
     service.initialize().then(() => console.log(color.green('StockService#initialize():SUCCESS')));
 }
+
+//Catches unhandled Promise errors
+// process.on('unhandledRejection', () => {
+    
+// })

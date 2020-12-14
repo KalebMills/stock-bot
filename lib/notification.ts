@@ -19,6 +19,7 @@ export interface DiscordNotificationOptions {
     guildId: string;
     token: string;
     logger: Logger;
+    channelName: string;
 }
 
 
@@ -31,6 +32,7 @@ export class DiscordNotification implements INotification {
     private readonly token: string;
     private logger: Logger;
     private guildId: string;
+    private channelName: string;
 
     constructor(options: DiscordNotificationOptions) {
         if (options.token) {
@@ -42,6 +44,7 @@ export class DiscordNotification implements INotification {
         }
         this.logger = options.logger;
         this.guildId = options.guildId;
+        this.channelName = options.channelName;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
@@ -55,7 +58,12 @@ export class DiscordNotification implements INotification {
     notify(message: NotificationOptions): Promise<void> {
         return this.client.guilds.fetch(this.guildId, undefined, true)
         .then(guild => {
-            const channel = guild.systemChannel;
+
+            const channel = guild.channels.cache.find(c => {
+                this.logger.log(LogLevel.INFO, c.name)
+                return c.name === this.channelName;
+            })! as discord.TextChannel;
+
             if (channel) {
 
                 const embed = new discord.MessageEmbed()

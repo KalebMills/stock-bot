@@ -11,9 +11,11 @@ import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
 import { INotification } from './notification';
 import * as W from './workers';
+import { IDiagnostic } from './diagnostic';
 
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
+    diagnostic: joi.object().required(), //TODO: Need a better way to type this
     exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
     mainWorker: joi.required(),    //TODO: Need a way to actually type this, though JS makes no differentiation between a function and constructor
@@ -44,6 +46,7 @@ export interface ITickerChange {
 
 export interface IStockServiceOptions extends IServiceOptions {
     datasource: IDataSource;
+    diagnostic: IDiagnostic;
     notification: INotification;
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
@@ -72,6 +75,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     private mainWorker: W.IStockWorker<ITickerChange>;
 
     exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
+    diagnostic: IDiagnostic;
     datasource: IDataSource;
     notification: INotification;
 
@@ -79,6 +83,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         super(options);
         this.exchange = options.exchange;
         this.datasource = options.datasource;
+        this.diagnostic = options.diagnostic;
         this.notification = options.notification;
         this.purchaseOptions = options.purchaseOptions;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
@@ -86,7 +91,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     }
 
     initialize(): Promise<void> {
-        return Promise.all([ super.initialize(), this.datasource.initialize(), this.exchange.initialize(), this.notification.initialize() ])
+        return Promise.all([ super.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.exchange.initialize(), this.notification.initialize() ])
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
         });
@@ -185,12 +190,17 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             this.logger.log(LogLevel.WARN, `Missing properties, timing out ${err.message}`)
             this.datasource.timeoutTicker(err.message); //Here, with that particular error, the message will be the TICKER
         } else {
-            this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`)
+            this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`);
+            this.diagnostic.alert({
+                level: LogLevel.ERROR,
+                title: 'Service Error',
+                message: `**ERROR**\n${err.name}\n${err.message}\n${err.stack || null}`
+            })
         }
     }
     
     close(): Promise<void> {
-        return Promise.all([ this.datasource.close(), this.exchange.close(), this.notification.close() ])
+        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close() ])
         .then(() => super.close());
     }
 }
