@@ -283,6 +283,7 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     }
 
     scrapeDatasource(): Promise<QuoteEvent[]> {
+        this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`)
         const outputData: QuoteEvent[] = [...this.data];
         
         // this.logger.log(LogLevel.INFO, `${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
