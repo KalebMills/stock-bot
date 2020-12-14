@@ -225,7 +225,7 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
                         }
                     });
                 } else {
-                    this.logger.log(LogLevel.INFO, `${currQuote.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currQuote, prevQuote)}`)
+                    this.logger.log(LogLevel.TRACE, `${currQuote.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currQuote, prevQuote)}`)
                     return;
                 }
             }
