@@ -119,6 +119,7 @@ export class MemoryDataStore implements IDataStore {
     save(key: string, data: DataStoreObject): Promise<DataStoreObject> {
         try {
             this.store[key] = JSON.stringify(data);
+            this.logger.log(LogLevel.INFO, `${key} was saved into ${this.constructor.name}. Store now has ${Object.keys(this.store).length} entries in it`)
             return Promise.resolve(data);
         } catch (e) {
             return Promise.reject(e);
@@ -126,6 +127,7 @@ export class MemoryDataStore implements IDataStore {
     }
 
     get(key: string): Promise<DataStoreObject[]> {
+        this.logger.log(LogLevel.INFO, `this.store.hasOwnProperty(${key}) == ${this.store.hasOwnProperty(key)}`);
         if (this._has(key) || this._hasWildCard(key)) {
             if (this._hasWildCard(key)) {
                 return this._fetchWildCardValues(key);
