@@ -118,10 +118,6 @@ export class MemoryDataStore implements IDataStore {
 
     save(key: string, data: DataStoreObject): Promise<DataStoreObject> {
         try {
-            /*  
-                NOTE: This stores a reference to the passed in object. So any
-                change made to the object higher up is stored here as well.
-            */
             this.store[key] = JSON.stringify(data);
             return Promise.resolve(data);
         } catch (e) {
@@ -134,6 +130,7 @@ export class MemoryDataStore implements IDataStore {
             if (this._hasWildCard(key)) {
                 return this._fetchWildCardValues(key);
             } else {
+                this.logger.log(LogLevel.INFO, `Found a single key: ${this.store[key]}`)
                 return Promise.resolve([JSON.parse(this.store[key])]);
             }
         } else {
