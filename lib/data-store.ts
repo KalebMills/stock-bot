@@ -122,7 +122,7 @@ export class MemoryDataStore implements IDataStore {
                 NOTE: This stores a reference to the passed in object. So any
                 change made to the object higher up is stored here as well.
             */
-            this.store[key] = data;
+            this.store[key] = JSON.stringify(data);
             return Promise.resolve(data);
         } catch (e) {
             return Promise.reject(e);
@@ -134,7 +134,7 @@ export class MemoryDataStore implements IDataStore {
             if (this._hasWildCard(key)) {
                 return this._fetchWildCardValues(key);
             } else {
-                return Promise.resolve([this.store[key]]);
+                return Promise.resolve([JSON.parse(this.store[key])]);
             }
         } else {
             return Promise.resolve([]);
