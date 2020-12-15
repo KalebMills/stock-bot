@@ -1,6 +1,7 @@
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import * as discord from 'discord.js';
 import * as winston from 'winston';
+import { getDiscordClientSingleton } from './util';
 
 export interface NotificationOptions {
     ticker: string;
@@ -17,9 +18,9 @@ export interface INotification<T = NotificationOptions> extends IInitializable, 
 
 export interface DiscordNotificationOptions {
     guildId: string;
-    token: string;
     logger: Logger;
     channelName: string;
+    token: string;
 }
 
 
@@ -35,13 +36,8 @@ export class DiscordNotification implements INotification {
     private channelName: string;
 
     constructor(options: DiscordNotificationOptions) {
-        if (options.token) {
-            //construct client
-            this.token = options.token;
-            this.client = new discord.Client({});
-        } else {
-            throw new Error('Missing token for Discord Client');
-        }
+        this.client = getDiscordClientSingleton()
+        this.token = options.token;
         this.logger = options.logger;
         this.guildId = options.guildId;
         this.channelName = options.channelName;
@@ -57,15 +53,12 @@ export class DiscordNotification implements INotification {
 
     notify(message: NotificationOptions): Promise<void> {
         return this.client.guilds.fetch(this.guildId, undefined, true)
-        .then(guild => {
-
-            const channel = guild.channels.cache.find(c => {
-                this.logger.log(LogLevel.INFO, c.name)
-                return c.name === this.channelName;
-            })! as discord.TextChannel;
-
+        .then(guild => guild.channels)
+        .then(channels => channels.cache.find(c => c.name === this.channelName)!)
+        .then(channel => channel as discord.TextChannel)
+        .then(channel => {
+            // console.log(channel);
             if (channel) {
-
                 const embed = new discord.MessageEmbed()
                 .setColor('#8030ff')
                 .setTitle(message.ticker)
@@ -92,7 +85,7 @@ export class DiscordNotification implements INotification {
                 });
             } else {
                 this.logger.log(LogLevel.ERROR, 'No system channel specified');
-                throw new Error(`No system channel is specified for the guild ${this.guildId}`);
+                return Promise.reject(new Error(`No system channel is specified for the guild ${this.guildId}`));
             }
         });
     }
@@ -122,3 +115,24 @@ export class PhonyNotification implements INotification {
         return Promise.resolve();
     }
 }
+
+// let n = new DiscordNotification({
+//     token: (process.env['DISCORD_API_TOKEN'] || ""),
+//     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
+//     channelName: 'stock-notifications',
+//     logger: winston.createLogger({
+//         transports: [ new winston.transports.Console() ]
+//     })
+// })
+
+// n.initialize()
+// .then(() => n.notify({
+//     message: 'TEST',
+//     ticker: 'TEST',
+//     price: 1.,
+//     volume: 100000,
+//     additionaData: {
+//         'TEST': 'DATA'
+//     }
+// }))
+// .finally(() => n.close())

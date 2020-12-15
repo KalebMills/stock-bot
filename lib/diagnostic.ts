@@ -1,6 +1,7 @@
 import { ICloseable, IInitializable, LogLevel, Logger } from "./base";
 import * as discord from 'discord.js';
 import { createLogger } from "winston";
+import { getDiscordClientSingleton } from "./util";
 
 
 interface DiagnosticLogOptions {
@@ -17,10 +18,10 @@ export interface IDiagnostic extends IInitializable, ICloseable {
 }
 
 export interface DiscordDiagnosticSystemOptions {
-    token: string;
     logger: Logger;
     guildId: string;
     channelName: string;
+    token: string;
 }
 
 /*
@@ -29,19 +30,15 @@ export interface DiscordDiagnosticSystemOptions {
 
 export class DiscordDiagnosticSystem implements IDiagnostic {
     private client: discord.Client;
-    private readonly token: string;
     private readonly guildId: string;
     private readonly channelName: string;
+    private token: string;
     private logger: Logger;
 
     constructor(options: DiscordDiagnosticSystemOptions) {
-        if (options.token) {
-            this.token = options.token;
-            this.client = new discord.Client({});
-        } else {
-            throw new Error('Missing token for Discord Client');
-        }
+        this.client = getDiscordClientSingleton();
         this.logger = options.logger;
+        this.token = options.token;
         this.guildId = options.guildId;
         this.channelName = options.channelName;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);

@@ -1,4 +1,5 @@
 import * as cp from 'child_process';
+import * as discord from 'discord.js';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -48,3 +49,8 @@ export const runCmd = (cmd: string): Promise<void> => {
         })
     });
 }
+
+const client = new discord.Client({});
+export const getDiscordClientSingleton = (): discord.Client => {
+    return client;
+};
