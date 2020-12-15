@@ -115,24 +115,3 @@ export class PhonyNotification implements INotification {
         return Promise.resolve();
     }
 }
-
-// let n = new DiscordNotification({
-//     token: (process.env['DISCORD_API_TOKEN'] || ""),
-//     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
-//     channelName: 'stock-notifications',
-//     logger: winston.createLogger({
-//         transports: [ new winston.transports.Console() ]
-//     })
-// })
-
-// n.initialize()
-// .then(() => n.notify({
-//     message: 'TEST',
-//     ticker: 'TEST',
-//     price: 1.,
-//     volume: 100000,
-//     additionaData: {
-//         'TEST': 'DATA'
-//     }
-// }))
-// .finally(() => n.close())
