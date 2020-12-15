@@ -196,6 +196,9 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
                 title: 'Service Error',
                 message: `**ERROR**\n${err.name}\n${err.message}\n${err.stack || null}`
             })
+            .catch(err => {
+                this.logger.log(LogLevel.ERROR, `${this.diagnostic.constructor.name}#alert():ERROR ${err} - ${JSON.stringify(err)}`);
+            })
         }
     }
     
