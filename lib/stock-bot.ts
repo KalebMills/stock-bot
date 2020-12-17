@@ -31,10 +31,7 @@ export const StockBotOptionsValidationSchema = joi.object({
     }).length(5),
     //Worker Options
     concurrency: joi.number().required(),
-    logger: joi.object().required(), //Winston is not actually a class,
-    workerOptions: joi.object({
-        tickTime: joi.number().required()
-    }).required()
+    logger: joi.object().required() //Winston is not actually a class
 })
 
 export interface ITickerChange {
@@ -128,12 +125,13 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
 
         if(this.processables.length > 0) {
             let ticker = this.processables.shift()!;
-            //@ts-ignore
-            this.datasource.timeoutTicker(ticker.sym); //TODO: This assumes the ITickerChange structure, which is not correct
 
             // this.logger.log(LogLevel.TRACE, `Taking ${JSON.stringify(ticker)} out of this.processables, pushing ticker to this.process(${JSON.stringify(ticker)})`);
             //Now update what is processable
-            const keys = Array.from(this.datasource.timedOutTickers.keys());     
+            const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
+            //@ts-ignore
+            this.datasource.timeoutTicker(ticker.sym, 180)
+            //TODO: This should *ONLY* be done everytime that we fetchWork().. we duplicate and expontentially increase the amount of work to be done by doing this here.
             //@ts-ignore
             this.processables = this.processables.filter((tkr: ITickerChange) => !keys.includes(tkr.sym));
             return Promise.resolve(ticker);
@@ -143,8 +141,9 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             return this.fetchWork()
             .then((tickers: ITickerChange[]) => {
                 //This filters out tickers that are timed out.
-                const keys = Array.from(this.datasource.timedOutTickers.keys());     
+                const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
                 this.processables = tickers.filter((ticker: ITickerChange) => !keys.includes(ticker.ticker));
+                this.logger.log(LogLevel.INFO, `this.processables.length after filter = ${this.processables.length}`)
 
                 //TODO: The current problem we have here, is that if we have multiple workers, when `this.preProcess()` is called, 
                 // Each worker will then call the Yahoo API again, and refill the `this.processable` Array with all of the same tickers. 
@@ -157,9 +156,9 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
                 if(!(this.processables.length > 0)) {
                     //TODO: This logic should be moved to _fetchTickerInfo
                     //NOTE: This is some edgecase code
-                    const keys = Array.from(this.datasource.timedOutTickers.keys());     
+                    const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
                     if(this.processables.some((ticker: ITickerChange) => !keys.includes(ticker.ticker))) {
-                        this.logger.log(LogLevel.TRACE, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
+                        this.logger.log(LogLevel.INFO, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
                         const pendingPromises = Array.from(this.datasource.timedOutTickers.values()).map(p => p.promise);
 
                         return Promise.all(pendingPromises)

@@ -1,6 +1,6 @@
 const joi = require('joi');
 const { PolygonLiveDataSource } = require('../lib/data-source');
-const { MemoryDataStore } = require('../lib/data-store');
+const { MemoryDataStore, RedisDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
@@ -34,24 +34,31 @@ const StockTickerSchema = joi.object({
 
 const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
 
-let t = []
+let t = [];
 
 for (let ticker of data) {
-    t.push(ticker);
+    if (ticker.length < 5 && !ticker.includes('.') && !ticker.includes('-'))  {
+        t.push(ticker);
+    }
 }
 
 const datasourceOptions = {
     logger,
-    //This because we will be processing QuoteEvent
     //TODO: This needs to be changed to be an abstract method of the DataSource class
     validationSchema: joi.object({}),
     subscribeTicker: t
 }
 
 const datasource = new PolygonLiveDataSource(datasourceOptions);
-const datastore = new MemoryDataStore({
-    logger
-});
+// const datastore = new MemoryDataStore({
+//     logger
+// });
+
+const datastore = new RedisDataStore({
+    logger,
+    host: 'localhost',
+    port: 6379
+})
 
 //NOTE: Using this exchange because we only want this to run during market hours
 
@@ -78,12 +85,11 @@ const notification = new DiscordNotification({
 const serviceOptions = {
     concurrency: 10,
     logger,
-    workerOptions: {
-        tickTime: 0
-    },
     datasource,
     datastore,
-    exchange,
+    exchange: new PhonyExchange({
+        logger
+    }),
     mainWorker: LiveDataStockWorker,
     notification
 };

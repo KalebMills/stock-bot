@@ -64,9 +64,6 @@ const notification = new PhonyNotification({
 const serviceOptions = {
     concurrency: 1,
     logger,
-    workerOptions: {
-        tickTime: 1000
-    },
     datasource,
     datastore,
     exchange,

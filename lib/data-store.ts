@@ -71,11 +71,16 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
             });
         } else {
             return new Promise<TOutput[]>((resolve, reject) => {
-                this.client.hgetall(data, (err: Error | null, data: DataStoreObject) => {
+                this.client.hgetall(data, (err: Error | null, d: DataStoreObject) => {
+                    console.log(`Redis.get(): ${JSON.stringify(d)}`)
                     if (err) {
                         reject(err);
                     } else {
-                        resolve([data as TOutput]);
+                        if (d) {
+                            resolve([(d as TOutput)]);
+                        } else {
+                            resolve([]);
+                        }
                     }
                 })
             });

@@ -12,7 +12,8 @@ import { PolygonSnapshot } from '../types/polygonSnapshot'
 import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
-import { QuoteEvent } from './workers';
+import { QuoteEvent, TradeEvent } from './workers';
+import { Trade } from '@master-chief/alpaca/types/entities';
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
     timedOutTickers: Map<string, U.IDeferredPromise>;
@@ -59,7 +60,7 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     timeoutTicker(ticker: string, timeout?: number /* in seconds */): void {
         if (!this.timedOutTickers.has(ticker)) {
             let t: NodeJS.Timeout;
-            let timeoutFunction = new Promise((resolve, reject) => {
+            let timeoutFunction = new Promise<void>((resolve, reject) => {
                 //TODO: It's possible we could increase performance by using Promise.delay here instead of creating a bunch of timers
                 t = setTimeout(() => {
                     console.log('Successfully resolved a timed out ticker')
@@ -219,9 +220,9 @@ export interface IPolygonLiveDataSourceOptions extends IDataSourceOptions {
     subscribeTicker: string[];
 }
 
-export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDataSource<QuoteEvent> {
+export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDataSource<TradeEvent> {
     private readonly scrapeUrl: string;
-    private data: QuoteEvent[];
+    private data: TradeEvent[];
     private emitter: EventEmitter;
     private polygonConn!: WebSocket;
     private subscribeTicker: string[];
@@ -234,7 +235,7 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         this.emitter = new EventEmitter();
         //TODO: If needed, later on we can require the caller to append the required *.TICKER prefix to allow this for more robust usage
         //TODO: Note, this seems like it should be changed to use TradeEvent, since it's more accurate as it pertains to what people are actually paying per share, since it's price is that of a historic nature
-        this.subscribeTicker = options.subscribeTicker.map(ticker => `Q.${ticker}`);
+        this.subscribeTicker = options.subscribeTicker.map(ticker => `T.${ticker}`);
         this.data = [];
         this.initializePromise = U.createDeferredPromise();
         this.closePromise = U.createDeferredPromise();
@@ -266,8 +267,8 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         //Once close is called, only resolve the method call once the final ticker is unsubscribed from
         this.emitter.on('UNSUBSCRIBED', () => this.closePromise.resolve());
         //Handle all incoming quotes
-        this.emitter.on('QUOTE', data => {
-            this._quoteHandler(data)
+        this.emitter.on('TRADE', data => {
+            this._tradeHandler(data)
         });
     }
 
@@ -282,18 +283,11 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         });
     }
 
-    scrapeDatasource(): Promise<QuoteEvent[]> {
-        this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`)
-        const outputData: QuoteEvent[] = [...this.data];
-        
-        // this.logger.log(LogLevel.INFO, `${this.constructor.name}#data has ${Object.keys(outputData).length} values in it`)
-        // this.logger.log(LogLevel.INFO, `outputData has ${Object.keys(outputData).length} values in it`)
-        // Remove returned values from the current outputData array;
-        this.data = this.data.filter(obj => {
-            return !outputData.includes(obj);
-        });
-
-        return Promise.resolve(outputData);
+    scrapeDatasource(): Promise<TradeEvent[]> {
+        this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`);
+        let output = [...this.data];
+        this.data = [];
+        return Promise.resolve(output);
     }
 
     private _statusHandler = (data: any): void => {
@@ -329,10 +323,10 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
             case "status":
                 this._statusHandler(data);
                 break;
-            case "Q":
+            case "T":
                 // console.log(JSON.stringify(data))
                 //TODO: NOTE removing this emitter seemed to fix the blocking problem we had last time, and instead just calling the quote handler directly
-                this.emitter.emit('QUOTE', data);
+                this.emitter.emit('TRADE', data);
                 // this._quoteHandler(data)
                 break;
 
@@ -341,8 +335,8 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
         }
     }
 
-    _quoteHandler = (data: QuoteEvent) => {
-        // this.logger.log(LogLevel.INFO, `QUOTE: ${JSON.stringify(data)}`)
+    _tradeHandler = (data: TradeEvent) => {
+        // this.logger.log(LogLevel.INFO, `TRADE: ${JSON.stringify(data)}`)
         this.data.push(data);
     }
 
@@ -370,26 +364,18 @@ export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDa
     }
 }
 
-export class PhonyDataSource extends DataSource<QuoteEvent> {
-    
-    constructor(options: IDataSourceOptions){
+export interface PhonyDataSourceOptions<T> extends DataSource<T> {
+    returnData: T;
+}
+
+export class PhonyDataSource<T> extends DataSource<T> {
+    returnData: T;
+    constructor(options: PhonyDataSourceOptions<T>){
         super(options);
+        this.returnData = options.returnData;
     }
 
-    scrapeDatasource(): Promise<QuoteEvent[]> {
-        const QUOTE_EVENT: QuoteEvent = {
-            "ev": "Q",              // Event Type
-            "sym": "MSFT",          // Symbol Ticker
-            "bx": 4,                // Bix Exchange ID
-            "bp": 114.125,          // Bid Price
-            "bs": 100,              // Bid Size
-            "ax": 7,                // Ask Exchange ID
-            "ap": 114.128,          // Ask Price
-            "as": 160,              // Ask Size
-            "c": 0,                 // Quote Condition
-            "t": 1536036818784      // Quote Timestamp ( Unix MS )
-        }
-
-        return Promise.resolve([QUOTE_EVENT]);
+    scrapeDatasource(): Promise<T[]> {
+        return Promise.resolve([this.returnData]);
     }
 }
