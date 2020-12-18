@@ -87,9 +87,7 @@ const serviceOptions = {
     logger,
     datasource,
     datastore,
-    exchange: new PhonyExchange({
-        logger
-    }),
+    exchange,
     mainWorker: LiveDataStockWorker,
     notification
 };

@@ -252,6 +252,25 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                         }
                     })
                     .then(() => {
+                        return this.exchange.placeOrder({
+                            qty: 1,
+                            order_class: 'bracket',
+                            time_in_force: 'gtc',
+                            symbol: currTrade.sym,
+                            side: 'buy',
+                            type: 'market',
+                            take_profit: {
+                                limit_price: currTrade.p + (currTrade.p * .03), //Take 2% profit
+                            },
+                            stop_loss: {
+                                stop_price: currTrade.p - (currTrade.p * .05), //Only allow 1% loss
+                            }
+                        })
+                        .then(() =>{
+                            this.logger.log(LogLevel.INFO, `Place PAPER order for ${currTrade.sym}`)
+                        })
+                    })
+                    .then(() => {
                         this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
                     });
                 } else {

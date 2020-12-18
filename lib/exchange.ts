@@ -84,8 +84,9 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     isMarketTime(): Promise<boolean> {
-        return this.getClock()
-        .then(data => data.is_open);
+        return Promise.resolve(true);
+        // return this.getClock()
+        // .then(data => data.is_open);
     }
 
     getBuyingPower(): Promise<number> {
