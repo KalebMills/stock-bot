@@ -1,4 +1,6 @@
+import { defer } from 'bluebird';
 import * as cp from 'child_process';
+import * as discord from 'discord.js';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -7,23 +9,21 @@ export interface IDeferredPromise {
     cancellable: Function;
 }
 
-export const createDeferredPromise = (pendingPromise: Promise<any>): IDeferredPromise => {
+export const createDeferredPromise = (): IDeferredPromise => {
     //@ts-ignore
     let deferredPromise!: IDeferredPromise = {};
     
     let p = new Promise((resolve, reject) => {
+        deferredPromise.cancellable = () => {};
         deferredPromise.reject = () => {
             deferredPromise.cancellable();
             reject();
         };
         deferredPromise.resolve = () => {
+            console.log(`Called resolve() on deferred Promise`)
             deferredPromise.cancellable();
             resolve();
         };
-        
-        pendingPromise
-        .then(() => resolve())
-        .catch(err => reject(err));
     });
 
     deferredPromise.promise = p;

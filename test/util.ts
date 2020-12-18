@@ -3,17 +3,11 @@ import * as assert from 'assert';
 
 describe('#createDeferredPromise', () => {
     it('Can defer a Promise properly', () => {
-        let t: NodeJS.Timeout;
-        let delayedPromise = new Promise((resolve, reject) => {
-            t = setTimeout(() => reject(), 1000);
-        });
-        
-        let deferredPromise = util.createDeferredPromise(delayedPromise);
-        deferredPromise.cancellable = () => {
-            t.unref();
-        }
+        let deferred = util.createDeferredPromise();
+        let timer = setTimeout(() => deferred.reject(), 1000);
+        deferred.cancellable = timer.unref;
 
-        return deferredPromise.promise
+        return deferred.promise
         .then(() => assert.fail('Promise should not resolve successfully.'))
         .catch(() => assert.ok(true));
     });
