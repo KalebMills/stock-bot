@@ -1,7 +1,6 @@
 import { ICloseable, IInitializable, LogLevel, Logger } from "./base";
 import * as discord from 'discord.js';
 import { createLogger } from "winston";
-import { getDiscordClientSingleton } from "./util";
 
 
 interface DiagnosticLogOptions {
@@ -22,6 +21,7 @@ export interface DiscordDiagnosticSystemOptions {
     guildId: string;
     channelName: string;
     token: string;
+    client: discord.Client;
 }
 
 /*
@@ -36,7 +36,7 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
     private logger: Logger;
 
     constructor(options: DiscordDiagnosticSystemOptions) {
-        this.client = getDiscordClientSingleton();
+        this.client = options.client;
         this.logger = options.logger;
         this.token = options.token;
         this.guildId = options.guildId;

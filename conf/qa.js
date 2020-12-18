@@ -2,6 +2,7 @@ const joi = require('joi');
 const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
 const path = require('path');
 const winston = require('winston');
+const discord = require('discord.js');
 const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
 const { DiscordNotification } = require('../lib/notification');
@@ -36,13 +37,16 @@ const datasourceOptions = {
     validationSchema: StockTickerSchema
 }
 
+const DISCORD_CLIENT = new discord.Client({});
+
 const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
 
 const diagnostic = new DiscordDiagnosticSystem({
     logger,
     token: (process.env['DISCORD_API_TOKEN'] || ""),
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
-    channelName: 'service-diagnostics'
+    channelName: 'service-diagnostics',
+    client: DISCORD_CLIENT
 });
 
 const exchange = new PhonyExchange({
@@ -53,7 +57,8 @@ const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
     token: (process.env['DISCORD_API_TOKEN'] || ""),
-    channelName: 'stock-notifications'
+    channelName: 'stock-notifications',
+    client: DISCORD_CLIENT
 });
 
 const serviceOptions = {

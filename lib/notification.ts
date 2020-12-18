@@ -1,7 +1,6 @@
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import * as discord from 'discord.js';
 import * as winston from 'winston';
-import { getDiscordClientSingleton } from './util';
 
 export interface NotificationOptions {
     ticker: string;
@@ -21,6 +20,7 @@ export interface DiscordNotificationOptions {
     logger: Logger;
     channelName: string;
     token: string;
+    client: discord.Client;
 }
 
 
@@ -36,7 +36,7 @@ export class DiscordNotification implements INotification {
     private channelName: string;
 
     constructor(options: DiscordNotificationOptions) {
-        this.client = getDiscordClientSingleton()
+        this.client =  options.client;
         this.token = options.token;
         this.logger = options.logger;
         this.guildId = options.guildId;
