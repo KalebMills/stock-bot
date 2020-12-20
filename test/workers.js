@@ -96,6 +96,8 @@ describe('#LiveDataStockWorker', () => {
         return worker.initialize();
     });
     it('Can process a QuoteEvent', () => {
+        //@ts-ignore
+        worker.exchange.placeOrder = () => Promise.resolve();
         //This first one should skip processing and just write the event to the datastore
         return worker.process(TRADE_EVENT)
             .then(() => {

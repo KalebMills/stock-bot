@@ -9,28 +9,21 @@ export interface IDeferredPromise {
     cancellable: Function;
 }
 
-export const createDeferredPromise = (pendingPromise?: Promise<any>): IDeferredPromise => {
+export const createDeferredPromise = (): IDeferredPromise => {
     //@ts-ignore
     let deferredPromise!: IDeferredPromise = {};
     
     let p = new Promise((resolve, reject) => {
+        deferredPromise.cancellable = () => {};
         deferredPromise.reject = () => {
             deferredPromise.cancellable();
             reject();
         };
         deferredPromise.resolve = () => {
+            console.log(`Called resolve() on deferred Promise`)
             deferredPromise.cancellable();
             resolve();
         };
-        
-        //Placeholder, meant to be overwritten;
-        deferredPromise.cancellable = () => {}
-
-        if (pendingPromise) {
-            pendingPromise
-            .then(() => resolve())
-            .catch(err => reject(err));
-        }
     });
 
     deferredPromise.promise = p;

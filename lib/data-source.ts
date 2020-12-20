@@ -59,25 +59,21 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
 
     timeoutTicker(ticker: string, timeout?: number /* in seconds */): void {
         if (!this.timedOutTickers.has(ticker)) {
-            let t: NodeJS.Timeout;
-            let timeoutFunction = new Promise<void>((resolve, reject) => {
-                //TODO: It's possible we could increase performance by using Promise.delay here instead of creating a bunch of timers
-                t = setTimeout(() => {
+            let deferred = U.createDeferredPromise();
+            let timer = setTimeout(() => {
                     console.log('Successfully resolved a timed out ticker')
-                    resolve()
+                    deferred.resolve()
                 }, timeout ? (timeout * 1000) : 600000); //Defaults to 10 minutes
-            });
-            let deferred = U.createDeferredPromise(timeoutFunction);
-            deferred.cancellable = () => {
-                t.unref();
-            }
+            deferred.cancellable = () => timer.unref();
+            deferred.reject = () => {}; //Does nothing
             
             //Set the ticker into the timed out Map
             this.timedOutTickers.set(ticker, deferred);
 
             //Once the promise resolves, delete itself out of the Map
-            deferred.promise.then(() => this.timedOutTickers.delete(ticker)); //Maybe should catch here too?
-
+            deferred.promise.then(() => {
+                this.timedOutTickers.delete(ticker);
+            });
             return;
         } else {
             this.logger.log(LogLevel.WARN, color.yellow(`${ticker} is already in the timedout ticker Map.`));
@@ -87,11 +83,14 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     close(): Promise<void> {
 
         //resolve all promises that were used to time out tickers;
-        return BPromise.each([ ...this.timedOutTickers.keys() ], key => {
-            let p = this.timedOutTickers.get(key);
-            p!.resolve();
-            this.timedOutTickers.delete(key);
-        })
+        return Promise.all([ ...this.timedOutTickers.keys()].map(k => {
+            console.log(`${k}.CLOSE():${this.constructor.name}`)
+            let promise = this.timedOutTickers.get(k);
+            promise?.resolve();
+            this.timedOutTickers.delete(k);
+
+            return promise?.promise;
+        }))
         .then(() => {
             console.log(`${this.constructor.name}#close:SUCCESS`)
         });

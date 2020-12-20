@@ -21,7 +21,10 @@ export interface BaseNotificationOptions {
 
 export interface DiscordNotificationOptions extends BaseNotificationOptions {
     guildId: string;
+    logger: Logger;
+    channelName: string;
     token: string;
+    client: discord.Client;
 }
 
 
@@ -34,17 +37,14 @@ export class DiscordNotification implements INotification {
     private readonly token: string;
     private logger: Logger;
     private guildId: string;
+    private channelName: string;
 
     constructor(options: DiscordNotificationOptions) {
-        if (options.token) {
-            //construct client
-            this.token = options.token;
-            this.client = new discord.Client({});
-        } else {
-            throw new Error('Missing token for Discord Client');
-        }
+        this.client =  options.client;
+        this.token = options.token;
         this.logger = options.logger;
         this.guildId = options.guildId;
+        this.channelName = options.channelName;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
@@ -57,10 +57,12 @@ export class DiscordNotification implements INotification {
 
     notify(message: NotificationOptions): Promise<void> {
         return this.client.guilds.fetch(this.guildId, undefined, true)
-        .then(guild => {
-            const channel = guild.systemChannel;
+        .then(guild => guild.channels)
+        .then(channels => channels.cache.find(c => c.name === this.channelName)!)
+        .then(channel => channel as discord.TextChannel)
+        .then(channel => {
+            // console.log(channel);
             if (channel) {
-
                 const embed = new discord.MessageEmbed()
                 .setColor('#8030ff')
                 .setTitle(message.ticker)
@@ -87,7 +89,7 @@ export class DiscordNotification implements INotification {
                 });
             } else {
                 this.logger.log(LogLevel.ERROR, 'No system channel specified');
-                throw new Error(`No system channel is specified for the guild ${this.guildId}`);
+                return Promise.reject(new Error(`No system channel is specified for the guild ${this.guildId}`));
             }
         });
     }

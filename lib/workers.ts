@@ -230,15 +230,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
             } else {
                 const [prevTrade]: TradeEvent[] = data;
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
-                const secondsTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .009 && secondsTaken >= 180) {
+                if (changePercentPerMinute > .009) {
                     this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
                     
-                    //BUY
-                    //Notify for now
                     return this.notification.notify({
                         ticker: currTrade.sym,
                         price: currTrade.p,
@@ -252,18 +249,19 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                         }
                     })
                     .then(() => {
+                        //TODO: Once we are not using this in Paper mode, this needs to be wrapped in a conditional block to track the # of day trades already made.
                         return this.exchange.placeOrder({
                             qty: 1,
                             order_class: 'bracket',
-                            time_in_force: 'gtc',
+                            time_in_force: 'day',
                             symbol: currTrade.sym,
                             side: 'buy',
-                            type: 'market',
+                            type: 'limit',
                             take_profit: {
-                                limit_price: currTrade.p + (currTrade.p * .03), //Take 2% profit
+                                limit_price: currTrade.p + (currTrade.p * .05), //Take 3% profit
                             },
                             stop_loss: {
-                                stop_price: currTrade.p - (currTrade.p * .05), //Only allow 1% loss
+                                stop_price: currTrade.p - (currTrade.p * .1), //Only allow 1% loss
                             }
                         })
                         .then(() =>{

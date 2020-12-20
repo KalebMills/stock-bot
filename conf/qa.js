@@ -3,7 +3,9 @@ const { PolygonLiveDataSource } = require('../lib/data-source');
 const { MemoryDataStore, RedisDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
+const discord = require('discord.js');
 const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
+const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
 const { DiscordNotification } = require('../lib/notification');
 const { LiveDataStockWorker } = require('../lib/workers');
 const fs = require('fs');
@@ -49,37 +51,28 @@ const datasourceOptions = {
     subscribeTicker: t
 }
 
-const datasource = new PolygonLiveDataSource(datasourceOptions);
-// const datastore = new MemoryDataStore({
-//     logger
-// });
+const DISCORD_CLIENT = new discord.Client({});
 
-const datastore = new RedisDataStore({
+const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
+
+const diagnostic = new DiscordDiagnosticSystem({
     logger,
-    host: 'localhost',
-    port: 6379
-})
+    token: (process.env['DISCORD_API_TOKEN'] || ""),
+    guildId: (process.env['DISCORD_GUILD_ID'] || ""),
+    channelName: 'service-diagnostics',
+    client: DISCORD_CLIENT
+});
 
-//NOTE: Using this exchange because we only want this to run during market hours
-
-const exchange = new AlpacasExchange({
-    logger,
-    keyId: (process.env['ALPACAS_API_KEY'] || ""),
-    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
-    acceptableGain: {
-        unit: 3,
-        type: 'percent'
-    },
-    acceptableLoss: {
-        unit: 2,
-        type: 'percent'
-    }
+const exchange = new PhonyExchange({
+    logger
 });
 
 const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
-    token: (process.env['DISCORD_API_KEY'] || "")
+    token: (process.env['DISCORD_API_KEY'] || ""),
+    channelName: 'stock-notifications',
+    client: DISCORD_CLIENT
 });
 
 const serviceOptions = {
@@ -87,6 +80,7 @@ const serviceOptions = {
     logger,
     datasource,
     datastore,
+    diagnostic,
     exchange,
     mainWorker: LiveDataStockWorker,
     notification

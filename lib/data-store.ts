@@ -1,6 +1,6 @@
 import redis from 'ioredis';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
-import { NotFoundError } from './exceptions';
+import { NotFoundError, UnprocessableEvent } from './exceptions';
 import color from 'chalk'
 
 //TODO: Perhaps find a more robust way to truly type this rather than using `any`
@@ -60,19 +60,18 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
     get(data: string): Promise<TOutput[]> {//Single ID
         //TODO: This should handle a wildcard as the id, i.e TSLA-*, which would fetch us all of the entries in the DB with TSLA-uuid
         if (data.includes('*')) { //Wildcard search
-            return new Promise<TOutput[]>((resolve, reject) => {
-                this.client.scan(0, 'match', data)
-                .then((data: [string, string[]]) => {
-                    //data[0] is supposed to be a new cursor, but we don't care about that
-                    console.log(data[1])
-                    resolve([]);
-                })
-                .catch(reject);
-            });
+            return Promise.reject(new UnprocessableEvent('Unsupported wildcard functionality'));
+            // return new Promise<TOutput[]>((resolve, reject) => {
+                // this.client.scan(0, 'match', data)
+                // .then((data: [string, string[]]) => {
+                //     //data[0] is supposed to be a new cursor, but we don't care about that
+                //     reject(new UnprocessableEvent('Unsupported wildcard functionality'))
+                // })
+                // .catch(reject);
+            // });
         } else {
             return new Promise<TOutput[]>((resolve, reject) => {
                 this.client.hgetall(data, (err: Error | null, d: DataStoreObject) => {
-                    console.log(`Redis.get(): ${JSON.stringify(d)}`)
                     if (err) {
                         reject(err);
                     } else {

@@ -3,6 +3,7 @@ const { YahooGainersDataSource, PolygonGainersLosersDataSource, PolygonLiveDataS
 const { MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const fs = require('fs');
+const { PhonyDiagnostic } = require('../lib/diagnostic');
 const winston = require('winston');
 const { PhonyExchange } = require('../lib/exchange');
 const { PhonyNotification } = require('../lib/notification');
@@ -61,11 +62,14 @@ const notification = new PhonyNotification({
     logger
 });
 
+const diagnostic = new PhonyDiagnostic();
+
 const serviceOptions = {
     concurrency: 1,
     logger,
     datasource,
     datastore,
+    diagnostic,
     exchange,
     mainWorker: LiveDataStockWorker,
     purchaseOptions: {
