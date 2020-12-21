@@ -219,9 +219,9 @@ export interface IPolygonLiveDataSourceOptions extends IDataSourceOptions {
     subscribeTicker: string[];
 }
 
-export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDataSource<TradeEvent> {
+export class PolygonLiveDataSource extends DataSource<QuoteEvent> implements IDataSource<QuoteEvent> {
     private readonly scrapeUrl: string;
-    private data: TradeEvent[];
+    private data: QuoteEvent[];
     private emitter: EventEmitter;
     private polygonConn!: WebSocket;
     private subscribeTicker: string[];
@@ -234,7 +234,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         this.emitter = new EventEmitter();
         //TODO: If needed, later on we can require the caller to append the required *.TICKER prefix to allow this for more robust usage
         //TODO: Note, this seems like it should be changed to use TradeEvent, since it's more accurate as it pertains to what people are actually paying per share, since it's price is that of a historic nature
-        this.subscribeTicker = options.subscribeTicker.map(ticker => `T.${ticker}`);
+        this.subscribeTicker = options.subscribeTicker.map(ticker => `Q.${ticker}`);
         this.data = [];
         this.initializePromise = U.createDeferredPromise();
         this.closePromise = U.createDeferredPromise();
@@ -266,9 +266,9 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         //Once close is called, only resolve the method call once the final ticker is unsubscribed from
         this.emitter.on('UNSUBSCRIBED', () => this.closePromise.resolve());
         //Handle all incoming quotes
-        this.emitter.on('TRADE', data => {
-            this._tradeHandler(data)
-        });
+        // this.emitter.on('QUOTE', data => {
+        //     this._tradeHandler(data)
+        // });
     }
 
     initialize(): Promise<void> {
@@ -282,7 +282,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         });
     }
 
-    scrapeDatasource(): Promise<TradeEvent[]> {
+    scrapeDatasource(): Promise<QuoteEvent[]> {
         this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`);
         let output = [...this.data];
         this.data = [];
@@ -325,8 +325,8 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
             case "T":
                 // console.log(JSON.stringify(data))
                 //TODO: NOTE removing this emitter seemed to fix the blocking problem we had last time, and instead just calling the quote handler directly
-                this.emitter.emit('TRADE', data);
-                // this._quoteHandler(data)
+                // this.emitter.emit('QUOTE', data);
+                this._quoteHandler(data)
                 break;
 
             default:
@@ -334,7 +334,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         }
     }
 
-    _tradeHandler = (data: TradeEvent) => {
+    _quoteHandler = (data: QuoteEvent) => {
         // this.logger.log(LogLevel.INFO, `TRADE: ${JSON.stringify(data)}`)
         this.data.push(data);
     }

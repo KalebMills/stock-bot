@@ -8,3 +8,7 @@ tsc-only:
 .PHONY: test-only
 test-only: 
 	npx ./node_modules/.bin/mocha test
+
+.PHONY: newest-tickers
+newest-tickers:
+	node bin/fetch-latest-tickers.js

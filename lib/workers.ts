@@ -197,9 +197,9 @@ export interface TradeEvent {
     t: number;
 }
 
-export class LiveDataStockWorker extends StockWorker<TradeEvent> {
+export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
 
-    constructor(options: IStockeWorkerOptions<TradeEvent, Alpacas.PlaceOrder, Alpacas.Order>) {
+    constructor(options: IStockeWorkerOptions<QuoteEvent, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
     }
 
@@ -217,35 +217,37 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         Because of this, we first want to store the data (for the safety of verifying we successfully saved the data in case of a restart) before trying to process it
         
     */
-    process(currTrade: TradeEvent): Promise<void> {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
+    process(currQuote: QuoteEvent): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(currQuote)})`);
 
-        return this.datastore.get(currTrade.sym) //Fetch the previous quote
-        .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
-        .then((data: TradeEvent[]) => {
+        return this.datastore.get(currQuote.sym) //Fetch the previous quote
+        .then(data => data as unknown as QuoteEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
+        .then((data: QuoteEvent[]) => {
             if (!(data.length === 1)) {
-                this.logger.log(LogLevel.INFO, `No data in datastore for ${currTrade.sym}`);
+                this.logger.log(LogLevel.INFO, `No data in datastore for ${currQuote.sym}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
                 return Promise.resolve();
             } else {
-                const [prevTrade]: TradeEvent[] = data;
-                const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
-                this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
+                const [prevQuote]: QuoteEvent[] = data;
+                const changePercentPerMinute: number = this._getChangePercentPerMinute(currQuote, prevQuote);
+                this.logger.log(LogLevel.INFO, `${currQuote.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
                 if (changePercentPerMinute > .009) {
-                    this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
+                    this.logger.log(LogLevel.INFO, `${currQuote.sym} has the required increase to notify in Discord`)
                     
                     return this.notification.notify({
-                        ticker: currTrade.sym,
-                        price: currTrade.p,
-                        message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
+                        ticker: currQuote.sym,
+                        price: currQuote.ap,
+                        message: `Ticker ${currQuote.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
                         additionaData: {
-                            exchange: this.exchange.constructor.name,
-                            datasource: this.datasource.constructor.name,
-                            'Measure Time': `${((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60} Minutes`,
-                            'Previous Price': `${prevTrade.p}`,
-                            'Action-Recommendation': 'Purchase'
+                            'Exchange': this.exchange.constructor.name,
+                            'DataSource': this.datasource.constructor.name,
+                            'Measure Time': `${((currQuote.t / 1000) - (prevQuote.t / 1000)) / 60} Minutes`,
+                            'Previous Ask Price': `${prevQuote.ap}`,
+                            'Action Recommendation': 'Purchase',
+                            'Current Bid Price': currQuote.bp,
+                            'Current Ask Price': currQuote.ap
                         }
                     })
                     .then(() => {
@@ -254,25 +256,25 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                             qty: 1,
                             order_class: 'bracket',
                             time_in_force: 'day',
-                            symbol: currTrade.sym,
+                            symbol: currQuote.sym,
                             side: 'buy',
                             type: 'limit',
                             take_profit: {
-                                limit_price: currTrade.p + (currTrade.p * .05), //Take 3% profit
+                                limit_price: currQuote.ap + (currQuote.ap * .05), //Take 3% profit
                             },
                             stop_loss: {
-                                stop_price: currTrade.p - (currTrade.p * .1), //Only allow 1% loss
+                                stop_price: currQuote.ap - (currQuote.ap * .1), //Only allow 1% loss
                             }
                         })
-                        .then(() =>{
-                            this.logger.log(LogLevel.INFO, `Place PAPER order for ${currTrade.sym}`)
-                        })
+                        .then(() => {
+                            this.logger.log(LogLevel.INFO, `Place PAPER order for ${currQuote.sym}`)
+                        });
                     })
                     .then(() => {
                         this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
                     });
                 } else {
-                    this.logger.log(LogLevel.TRACE, `${currTrade.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currTrade, prevTrade)}`)
+                    this.logger.log(LogLevel.TRACE, `${currQuote.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currQuote, prevQuote)}`)
                     return;
                 }
             }
@@ -280,7 +282,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         .then(() => {
             this.logger.log(LogLevel.INFO, `Completed process()`);
         })
-        .finally(() => this.datastore.save(currTrade.sym, currTrade)); //Timeout each ticker for 3 minutes
+        .finally(() => this.datastore.save(currQuote.sym, currQuote)); //Timeout each ticker for 3 minutes
     }
 
     /**
@@ -289,11 +291,11 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
      * @param timeInSeconds The time (in seconds) of the time taken between the two compared values
      */
 
-    private _getChangePercentPerMinute (currQuote: TradeEvent, prevQuote: TradeEvent): number {
-        this.logger.log(LogLevel.INFO, `currQuote: ${currQuote.p} prevQuote: ${prevQuote.p} -- currQuote.t = ${currQuote.t} --- prevQuote.t = ${prevQuote.t}`)
+    private _getChangePercentPerMinute (currQuote: QuoteEvent, prevQuote: QuoteEvent): number {
+        this.logger.log(LogLevel.INFO, `currQuote: ${currQuote.ap} prevQuote: ${prevQuote.ap} -- currQuote.t = ${currQuote.t} --- prevQuote.t = ${prevQuote.t}`)
         this.logger.log(LogLevel.INFO, `Time difference in seconds: ${((currQuote.t / 1000) - (prevQuote.t / 1000))}`)
         // This gets the difference between the two quotes, and get's the % of that change of a share price. i.e (11 - 10) / 11 = 10%;
-        const changePercent = ((currQuote.p - prevQuote.p) / currQuote.p);
+        const changePercent = ((currQuote.ap - prevQuote.ap) / currQuote.ap);
         //Gets time difference in seconds, and translate to minutes
         const timeDifferenceInMinutes = ((currQuote.t / 1000) - (prevQuote.t / 1000)) / 60;
 
