@@ -228,6 +228,7 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
                 return Promise.resolve();
             } else {
+                this.logger.log(LogLevel.INFO, `PrevQuote: ${JSON.stringify(data)}`)
                 const [prevQuote]: QuoteEvent[] = data;
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currQuote, prevQuote);
                 this.logger.log(LogLevel.INFO, `${currQuote.sym} has changed ${changePercentPerMinute} per minute.`);
@@ -252,23 +253,23 @@ export class LiveDataStockWorker extends StockWorker<QuoteEvent> {
                     })
                     .then(() => {
                         //TODO: Once we are not using this in Paper mode, this needs to be wrapped in a conditional block to track the # of day trades already made.
-                        return this.exchange.placeOrder({
-                            qty: 1,
-                            order_class: 'bracket',
-                            time_in_force: 'day',
-                            symbol: currQuote.sym,
-                            side: 'buy',
-                            type: 'limit',
-                            take_profit: {
-                                limit_price: currQuote.ap + (currQuote.ap * .05), //Take 3% profit
-                            },
-                            stop_loss: {
-                                stop_price: currQuote.ap - (currQuote.ap * .1), //Only allow 1% loss
-                            }
-                        })
-                        .then(() => {
-                            this.logger.log(LogLevel.INFO, `Place PAPER order for ${currQuote.sym}`)
-                        });
+                        // return this.exchange.placeOrder({
+                        //     qty: 1,
+                        //     order_class: 'bracket',
+                        //     time_in_force: 'day',
+                        //     symbol: currQuote.sym,
+                        //     side: 'buy',
+                        //     type: 'limit',
+                        //     take_profit: {
+                        //         limit_price: currQuote.ap + (currQuote.ap * .05), //Take 3% profit
+                        //     },
+                        //     stop_loss: {
+                        //         stop_price: currQuote.ap - (currQuote.ap * .1), //Only allow 1% loss
+                        //     }
+                        // })
+                        // .then(() => {
+                        //     this.logger.log(LogLevel.INFO, `Place PAPER order for ${currQuote.sym}`)
+                        // });
                     })
                     .then(() => {
                         this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
