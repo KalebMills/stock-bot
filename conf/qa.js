@@ -1,10 +1,10 @@
 const joi = require('joi');
 const { PolygonLiveDataSource } = require('../lib/data-source');
-const { MemoryDataStore, RedisDataStore } = require('../lib/data-store');
+const { RedisDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const discord = require('discord.js');
-const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
+const { PhonyExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
 const { DiscordNotification } = require('../lib/notification');
 const { LiveDataStockWorker } = require('../lib/workers');
@@ -39,9 +39,7 @@ const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.tx
 let t = [];
 
 for (let ticker of data) {
-    if (ticker.length < 5 && !ticker.includes('.') && !ticker.includes('-'))  {
-        t.push(ticker);
-    }
+    t.push(ticker);
 }
 
 const datasourceOptions = {
@@ -53,7 +51,17 @@ const datasourceOptions = {
 
 const DISCORD_CLIENT = new discord.Client({});
 
-const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
+const datasource = new PolygonLiveDataSource({
+    logger,
+    subscribeTicker: t,
+    validationSchema: joi.object({})
+});
+
+const datastore = new RedisDataStore({
+    host: 'localhost',
+    port: 6379,
+    logger
+});
 
 const diagnostic = new DiscordDiagnosticSystem({
     logger,
@@ -64,7 +72,7 @@ const diagnostic = new DiscordDiagnosticSystem({
 });
 
 const exchange = new PhonyExchange({
-    logger
+    logger,
 });
 
 const notification = new DiscordNotification({
@@ -76,7 +84,7 @@ const notification = new DiscordNotification({
 });
 
 const serviceOptions = {
-    concurrency: 10,
+    concurrency: 2,
     logger,
     datasource,
     datastore,
