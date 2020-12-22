@@ -75,7 +75,7 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
                     if (err) {
                         reject(err);
                     } else {
-                        if (d) {
+                        if (d && Object.keys(d).length > 0) {
                             resolve([(d as TOutput)]);
                         } else {
                             resolve([]);
