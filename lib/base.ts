@@ -106,19 +106,8 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
                     _preProcessor: this.preProcess
                 });
                 this.workers.set(workerId, worker);
+                worker.start();
             }
-        })
-        .then(() => {
-            let pendingWork: Promise<any>[] = [];
-
-            this.workers.forEach(worker => {
-                pendingWork.push(worker.initialize().then(() => {
-                    worker.start();
-                    this.logger.log(LogLevel.INFO, `Worker ${worker.id}#start():SUCCESS`);
-                }));
-            });
-
-            return Promise.all(pendingWork);
         })
         .then(() => this.logger.log(LogLevel.TRACE, `Started all workers for ${this.constructor.name}#initialize():SUCCESS`))
         .then(() => {})
