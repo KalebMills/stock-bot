@@ -87,12 +87,15 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     concurrency: number;
     workerOptions: IWorkerOptions<POutput>;
     logger: Logger;
+    isClosed: boolean;
     constructor(options: IServiceOptions) {
         this.concurrency = options.concurrency;
         this.workers = new Map();
         //@ts-ignore
         this.workerOptions = options.workerOptions; //TODO: fix this type error; makeWorkerOptions should have it's own interface
         this.logger = options.logger;
+        this.isClosed = false;
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
     initialize(): Promise<void> {
@@ -120,6 +123,8 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     abstract exceptionHandler(err: Error): void;
 
     close(): Promise<void> {
+        this.isClosed = true;
+
         let pendingWork: Promise<any>[] = [];
 
         this.workers.forEach(worker => {

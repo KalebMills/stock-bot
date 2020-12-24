@@ -81,7 +81,6 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     datasource: IDataSource;
     datastore: IDataStore;
     notification: INotification;
-    _preProcessDataFetchBackOffPromise: Promise<any> | null;   
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -93,11 +92,11 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         this.purchaseOptions = options.purchaseOptions;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
         this.mainWorker = options.mainWorker;
-        this._preProcessDataFetchBackOffPromise = Promise.resolve();
     }
 
     initialize(): Promise<void> {
-        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize() ])
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
+        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize() ])
         .then(() => super.initialize())
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
@@ -123,6 +122,10 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     preProcess = async (): Promise<ITickerChange> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
         let marketIsOpen = (await this.exchange.isMarketTime());
+
+        if (this.isClosed) {
+            return Promise.reject(new exception.ServiceClosed());
+        }
 
         if(!marketIsOpen) {
             this.logger.log(LogLevel.INFO, 'Market is currently closed. Delaying next try by 5 minutes.')
@@ -205,6 +208,9 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         if(err.name === exception.UnprocessableTicker.name) {
             this.logger.log(LogLevel.WARN, `Missing properties, timing out ${err.message}`)
             this.datasource.timeoutTicker(err.message); //Here, with that particular error, the message will be the TICKER
+        } else if (err.name === exception.ServiceClosed.name) {
+            //Do nothing
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#exceptionHandler - Received ServiceClosed error from Worker Process.`);
         } else {
             this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`);
             this.diagnostic.alert({

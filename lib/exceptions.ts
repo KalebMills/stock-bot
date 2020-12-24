@@ -19,6 +19,15 @@ export class UnprocessableTicker extends DefaultError {
     }
 }
 
+export class ServiceClosed extends DefaultError {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, ServiceClosed.prototype);
+        this.message = message || 'ServiceClosed';
+        this.name = this.constructor.name;
+    }
+}
+
 export class UnprocessableEvent extends DefaultError {
     constructor(message?: string) {
         super(message);
