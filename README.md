@@ -17,6 +17,8 @@ The following are the main important abstractions for this service:
 | IWorker   | The `IWorker` interface serves as the "operational" part of the service. Meaning this is the class that will do all of the work for this service, so it contains several methods for cleaning / processing data before trying to act upon it, and start and stop methods. |
 | Exchange | The Exchange interface it an abstraction of any class that allows a user to buy or sell something. In our use case, we mainly care about abstracting API's that allow us to buy and sell stock. |
 | IDataSource | The `IDataSource` interface gives us the ability to abstract any API that gives us stock data, this information is then passed to the `IWorker` to make decisions on buying and selling. This comes with the ability to sideline tickers, in the case it's already been returned, or there is some issue with trading that ticket. |
+| INotification | The `INotification` interface provides the bot an interface to notify over bot outputs. This differs from the `IDiagnostic` interface, in that this particular abstraction is meant for external user facing notifications. In our case, we use this class to output stocks the bot has deemed should be purchased. The idea here is that this is the way the publicly output information from the bots perspective. |
+| IDiagnostic | The `IDiagnostic` interface provides a easy way to notify the owner(s) of bot operations. For instance, an unhandled error comes through. This interface allows the bot to put out that diagnostic information to the owner(s). |
 
 ## Usage
 
@@ -37,4 +39,4 @@ The flow of getting a feature or bug fix merged in is Github Issue -> PR -> Test
 | `CONFIG_FILE` | string | false | This points to a file in the `conf` folder, it is simply the file name, i.e `dev` |
 | `STOCK_LOG_DIR` | string | false | This is the directory to which the service should write logs to |
 | `DISCORD_API_KEY` | string | false | The token used for the `DiscordNotification` class |
-| ` DISCORD_GUILD_ID` | string | false | ID used to know which server to post to. This is required to use the `DiscordNotification` class |
+| `DISCORD_GUILD_ID` | string | false | ID used to know which server to post to. This is required to use the `DiscordNotification` class |
