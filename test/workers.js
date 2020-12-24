@@ -56,6 +56,7 @@ let datastore = new data_store_1.PhonyDataStore({ logger });
 //         "t": 1536036818784      // Quote Timestamp ( Unix MS )
 //     }
 const TRADE_EVENT = {
+    "ticker": 'MSFT',
     "ev": "T",
     "sym": "MSFT",
     "x": 4,
