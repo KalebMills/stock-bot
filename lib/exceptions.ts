@@ -1,3 +1,5 @@
+import { Constructor } from '../types';
+
 
 export class DefaultError extends Error {
     constructor(message?: string) {
@@ -13,6 +15,24 @@ export class UnprocessableTicker extends DefaultError {
         super(message);
         Object.setPrototypeOf(this, UnprocessableTicker.prototype);
         this.message = message || 'UnprocessableTicker';
+        this.name = this.constructor.name;
+    }
+}
+
+export class ServiceClosed extends DefaultError {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, ServiceClosed.prototype);
+        this.message = message || 'ServiceClosed';
+        this.name = this.constructor.name;
+    }
+}
+
+export class UnprocessableEvent extends DefaultError {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, UnprocessableEvent.prototype);
+        this.message = message || 'UnprocessableEvent';
         this.name = this.constructor.name;
     }
 }

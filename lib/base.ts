@@ -87,12 +87,15 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     concurrency: number;
     workerOptions: IWorkerOptions<POutput>;
     logger: Logger;
+    isClosed: boolean;
     constructor(options: IServiceOptions) {
         this.concurrency = options.concurrency;
         this.workers = new Map();
         //@ts-ignore
         this.workerOptions = options.workerOptions; //TODO: fix this type error; makeWorkerOptions should have it's own interface
         this.logger = options.logger;
+        this.isClosed = false;
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
     initialize(): Promise<void> {
@@ -105,21 +108,9 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
                     logger: this.logger,
                     _preProcessor: this.preProcess
                 });
-                this.logger.log(LogLevel.INFO, `Spawned ${worker.constructor.name} Worker ${workerId}`);
                 this.workers.set(workerId, worker);
+                worker.start();
             }
-        })
-        .then(() => {
-            let pendingWork: Promise<any>[] = [];
-
-            this.workers.forEach(worker => {
-                pendingWork.push(worker.initialize().then(() => {
-                    worker.start();
-                    this.logger.log(LogLevel.INFO, `Worker ${worker.id}#start():SUCCESS`);
-                }));
-            });
-
-            return Promise.all(pendingWork);
         })
         .then(() => this.logger.log(LogLevel.TRACE, `Started all workers for ${this.constructor.name}#initialize():SUCCESS`))
         .then(() => {})
@@ -132,6 +123,8 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     abstract exceptionHandler(err: Error): void;
 
     close(): Promise<void> {
+        this.isClosed = true;
+
         let pendingWork: Promise<any>[] = [];
 
         this.workers.forEach(worker => {
@@ -176,7 +169,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
 
     initialize(): Promise<void> {
         return Promise.resolve()
-        .then(() => this.logger.log(LogLevel.TRACE, `Worker ${this.id}#initialized():SUCCESS`))
+        .then(() => this.logger.log(LogLevel.TRACE, `Worker ${this.id}#initialize():SUCCESS`))
         .then(() => {})
     }
 
@@ -193,6 +186,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
     run(): void {
         if(this.isRunning && !this._pendingProcess && !this.isClosed) {
             
+            //TODO: this._preProcessor should not be called here, instead this._preProcessor should mostly likely be removed.
             this._pendingProcess = this._preProcessor().then((args) => this.process(args))
 
             this._pendingProcess

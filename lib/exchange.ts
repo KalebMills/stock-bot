@@ -84,13 +84,14 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     isMarketTime(): Promise<boolean> {
-        return this.getClock()
-        .then(data => data.is_open);
+        return Promise.resolve(true);
+        // return this.getClock()
+        // .then(data => data.is_open);
     }
 
     getBuyingPower(): Promise<number> {
         return this.getAccount()
-        .then(res => res.buying_power);
+        .then(res => res.daytrading_buying_power);
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
@@ -99,8 +100,10 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     initialize(): Promise<void> {
-        this.logger.log(LogLevel.INFO, color.green(`${this.constructor.name}#initialize():SUCCESS`))
-        return Promise.resolve();
+        return Promise.resolve()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, color.green(`${this.constructor.name}#initialize():SUCCESS`));
+        })
     }
 
     close(): Promise<void> {
@@ -126,7 +129,10 @@ export class PhonyExchange implements Exchange<string, string, string> {
     }
 
     initialize(): Promise<void> {
-        return Promise.resolve();
+        return Promise.resolve()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#intiialize():SUCCESS`);
+        })
     }
 
     buy(something: string): Promise<string> {

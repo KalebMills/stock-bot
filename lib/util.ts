@@ -1,6 +1,6 @@
-import { defer } from 'bluebird';
 import * as cp from 'child_process';
-import * as discord from 'discord.js';
+import * as winston from 'winston';
+import { Logger } from './base';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -47,4 +47,23 @@ export const runCmd = (cmd: string): Promise<void> => {
             }
         })
     });
+}
+
+export const createLogger = (options: Partial<winston.LoggerOptions>): Logger => {
+    let transports: winston.transports.ConsoleTransportInstance[] = [new winston.transports.Console()];
+
+    if (options.transports) {
+        if (Array.isArray(options.transports)) {
+            //@ts-ignore
+            transports.push(...options.transports);
+        } else {
+            //@ts-ignore
+            transports.push(options.transports)
+        }
+    }
+
+    return winston.createLogger({
+        transports,
+        ...options
+    })
 }

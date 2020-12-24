@@ -5,17 +5,20 @@ import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
-import BPromise, { reject } from 'bluebird';
+import WebSocket from 'ws';
+import { EventEmitter } from 'events';
 import { PolygonSnapshot } from '../types/polygonSnapshot'
-import { InvalidDataError } from './exceptions'
+import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
+import { TradeEvent } from './workers';
 
-export interface IDataSource extends ICloseable, IInitializable {
+
+export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
     validationSchema: joi.Schema;
     timedOutTickers: Map<string, U.IDeferredPromise>;
     validateData(input: any): boolean;
-    scrapeDatasource(): Promise<ITickerChange[]>;
+    scrapeDatasource(): Promise<TOutput[]>;
     timeoutTicker(ticker: string, timeout?: number): void;
 }
 
@@ -24,10 +27,9 @@ export interface IDataSourceOptions {
     logger: Logger;
 }
 
-export abstract class DataSource implements IDataSource {
+export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     readonly validationSchema: joi.Schema;
     logger: Logger;
-
     timedOutTickers: Map<string, U.IDeferredPromise>;
 
     constructor(options: IDataSourceOptions) {
@@ -53,7 +55,7 @@ export abstract class DataSource implements IDataSource {
         }
     }
 
-    abstract scrapeDatasource(): Promise<ITickerChange[]>;
+    abstract scrapeDatasource(): Promise<TOutput[]>;
 
     timeoutTicker(ticker: string, timeout?: number /* in seconds */): void {
         if (!this.timedOutTickers.has(ticker)) {
@@ -96,7 +98,7 @@ export abstract class DataSource implements IDataSource {
 }
 
 
-export class YahooGainersDataSource extends DataSource implements IDataSource {
+export class YahooGainersDataSource extends DataSource<ITickerChange> implements IDataSource {
     scrapeUrl: string;
     constructor(options: IDataSourceOptions) {
         super(options);
@@ -159,8 +161,7 @@ export class YahooGainersDataSource extends DataSource implements IDataSource {
     }
 }
 
-
-export class PolygonGainersLosersDataSource extends DataSource implements IDataSource {
+export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> implements IDataSource {
     scrapeUrl: string;
     apiKey: string;
     constructor(options: IDataSourceOptions) {
@@ -213,3 +214,170 @@ export class PolygonGainersLosersDataSource extends DataSource implements IDataS
     }
 }
 //TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
+
+export interface IPolygonLiveDataSourceOptions extends IDataSourceOptions {
+    subscribeTicker: string[];
+}
+
+export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDataSource<TradeEvent> {
+    private readonly scrapeUrl: string;
+    private data: TradeEvent[];
+    private emitter: EventEmitter;
+    private polygonConn!: WebSocket;
+    private subscribeTicker: string[];
+    private initializePromise: U.IDeferredPromise;
+    private closePromise: U.IDeferredPromise;
+    private apiKey: string;
+    
+    constructor(options: IPolygonLiveDataSourceOptions) {
+        super(options);
+        this.emitter = new EventEmitter();
+        //TODO: If needed, later on we can require the caller to append the required *.TICKER prefix to allow this for more robust usage
+        //TODO: Note, this seems like it should be changed to use TradeEvent, since it's more accurate as it pertains to what people are actually paying per share, since it's price is that of a historic nature
+        this.subscribeTicker = options.subscribeTicker.map(ticker => `T.${ticker}`);
+        this.data = [];
+        this.initializePromise = U.createDeferredPromise();
+        this.closePromise = U.createDeferredPromise();
+        this.scrapeUrl = "wss://socket.polygon.io/stocks";
+        this.polygonConn = new WebSocket(this.scrapeUrl);
+        this.apiKey = (process.env['ALPACAS_API_KEY'] || "");
+
+        //Event Handlers
+        //Our generic message handler for incoming messages
+        this.polygonConn.on('message', this._polygonMessageHandler);
+
+        //Once connected, authenticate with Polygon
+        this.emitter.on('CONNECTED', () => {
+            this.polygonConn.send(JSON.stringify({
+                "action": "auth",
+                "params": process.env['ALPACAS_API_KEY']
+            }));
+        });
+        //Once Authenticated, subscribe to tickers
+        this.emitter.on('AUTHENTICATED', () => {
+            this.polygonConn.send(JSON.stringify({
+                "action": "subscribe",
+                "params": `${this.subscribeTicker.join(',')}`
+            }));
+        });
+
+        //Once subscribed to all tickers, allow initialize method to resolve
+        this.emitter.on('SUBSCRIBED', () => this.initializePromise.resolve());
+        //Once close is called, only resolve the method call once the final ticker is unsubscribed from
+        this.emitter.on('UNSUBSCRIBED', () => this.closePromise.resolve());
+    }
+
+    initialize(): Promise<void> {
+        if (!this.apiKey) {
+            return Promise.reject(new InvalidDataError(`ALPACAS_API_KEY environment variable required for ${this.constructor.name}`));
+        }
+
+        return this.initializePromise.promise
+        .then(() => {
+            //Handle all incoming quotes
+            //TODO: May want to refactor this, but the idea is we don't want to handle incoming quotes until our promise is resolved
+            this.emitter.on('TRADE', data => {
+                this._tradeHandler(data);
+            });
+        })
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
+        });
+    }
+
+    scrapeDatasource(): Promise<TradeEvent[]> {
+        this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`);
+        let output = [...this.data];
+        this.data = [];
+        return Promise.resolve(output);
+    }
+
+    private _statusHandler = (data: any): void => {
+        switch(data.status) {
+            case 'connected':
+                this.emitter.emit('CONNECTED', this.emitter);
+                break;
+            case 'auth_success':
+                this.emitter.emit('AUTHENTICATED', this.emitter);
+                break;
+            case 'success':
+                //Used to tell the class when we have successfully subscribed to the last ticker in the list
+                if (data.message.includes(this.subscribeTicker[this.subscribeTicker.length - 1])) {
+                    const eventName = data.message.includes('unsubscribed') ? 'UNSUBSCRIBED' : 'SUBSCRIBED';
+                    this.emitter.emit(eventName, this.emitter);
+                }
+                break;
+            default: 
+                this.logger.log(LogLevel.INFO, `Unknown status type ${data.status}`);
+                break;
+        }
+    }
+
+    /*
+        NOTE: This message handler only supports the 'status' and 'Q' events, nothing else.
+    */
+    private _polygonMessageHandler = (data: any): void => {
+        data = JSON.parse(data);
+        data = data[0];
+        const event = data.ev;
+
+        switch(event) {
+            case "status":
+                this._statusHandler(data);
+                break;
+            case "T":
+                // console.log(JSON.stringify(data))
+                //TODO: NOTE removing this emitter seemed to fix the blocking problem we had last time, and instead just calling the quote handler directly
+                this.emitter.emit('TRADE', data);
+                break;
+
+            default:
+                throw new UnprocessableEvent(`${this.constructor.name} not currently configured to handle "${event}" event`);
+        }
+    }
+
+    _tradeHandler = (data: TradeEvent) => {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#data.length = ${this.data.length}`);
+        // this.logger.log(LogLevel.TRACE, `QUOTE: ${JSON.stringify(data)}`)
+        this.data.push(data);
+    }
+
+    close(): Promise<void> {
+        if (this.polygonConn.CLOSED || this.polygonConn.CLOSING || this.polygonConn.CONNECTING) {
+            try {
+                this.polygonConn.close();
+                return Promise.resolve();
+            } catch (e) {
+                //We know sometimes the WebSocket connection won't be connected, and will throw an error
+                return Promise.resolve();
+            }
+        } else {
+            this.polygonConn.send(JSON.stringify({
+                "action": "unsubscribe",
+                "params": this.subscribeTicker.join(',')
+            }));
+    
+    
+            return this.closePromise.promise
+            .then(() => {
+                this.polygonConn.close();
+            });
+        }
+    }
+}
+
+export interface PhonyDataSourceOptions<T> extends DataSource<T> {
+    returnData: T;
+}
+
+export class PhonyDataSource<T> extends DataSource<T> {
+    returnData: T;
+    constructor(options: PhonyDataSourceOptions<T>){
+        super(options);
+        this.returnData = options.returnData;
+    }
+
+    scrapeDatasource(): Promise<T[]> {
+        return Promise.resolve([this.returnData]);
+    }
+}

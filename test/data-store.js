@@ -30,6 +30,9 @@ const uuid = __importStar(require("uuid"));
 const winston_1 = __importDefault(require("winston"));
 const CONSTRUCT_DOCKER_REDIS = () => util_1.runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
 const DESTORY_DOCKER_REDIS = () => util_1.runCmd('docker rm -f TEST_REDIS_DB');
+const logger = winston_1.default.createLogger({
+    transports: [new winston_1.default.transports.Console()]
+});
 describe('#MemoryDataStore', () => {
     const TEST_KEY = 'TEST_KEY';
     const TEST_DATA = {
@@ -37,23 +40,35 @@ describe('#MemoryDataStore', () => {
     };
     let store;
     it('Can construct MemoryDataStore', () => {
-        store = new data_store_1.MemoryDataStore();
+        store = new data_store_1.MemoryDataStore({
+            logger
+        });
         chai.assert.instanceOf(store, data_store_1.MemoryDataStore);
     });
     it('Can initialize MemoryDataStore', () => {
         return store.initialize();
     });
     it('Can save data in MemoryDataStore', () => {
-        const data = {
-            'test': 'data'
-        };
         return store.save(TEST_KEY, TEST_DATA);
     });
     it('Can get data from MemoryDataStore', () => {
         return store.get(TEST_KEY)
             .then(data => {
-            chai.assert.deepEqual(data, TEST_DATA);
+            chai.assert.deepEqual(data, [TEST_DATA]);
         });
+    });
+    it('Can save lots of data in the MemoryDataStore', () => {
+        let promises = [];
+        for (let i = 1; i <= 1000; i++) {
+            let key = uuid.v4();
+            let val = uuid.v4();
+            promises.push(store.save(key, { val }));
+        }
+        return Promise.all(promises);
+    });
+    it('Has the expected number of keys', () => {
+        return store.get("*")
+            .then(data => chai.assert.equal(data.length, 1001));
     });
     it('Can delete data in MemoryDataStore', () => {
         return store.delete(TEST_KEY)
@@ -71,9 +86,9 @@ describe('#MemoryDataStore', () => {
 describe('#RedisDataStore', () => {
     let store;
     const TEST_KEY = uuid.v4();
-    const TEST_DATA = {
-        'TEST': 'DATA'
-    };
+    const TEST_DATA = [{
+            'TEST': 'DATA'
+        }];
     if (!util_1.inCI()) {
         before(() => CONSTRUCT_DOCKER_REDIS());
         after(() => DESTORY_DOCKER_REDIS());

@@ -1,11 +1,13 @@
 const joi = require('joi');
-const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
+const { YahooGainersDataSource, PolygonGainersLosersDataSource, PolygonLiveDataSource } = require('../lib/data-source');
+const { MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
+const fs = require('fs');
 const { PhonyDiagnostic } = require('../lib/diagnostic');
 const winston = require('winston');
 const { PhonyExchange } = require('../lib/exchange');
 const { PhonyNotification } = require('../lib/notification');
-const { TopGainerNotificationStockWorker } = require('../lib/workers');
+const { TopGainerNotificationStockWorker, LiveDataStockWorker } = require('../lib/workers');
 
 const logger = winston.createLogger({
     transports: [
@@ -31,30 +33,45 @@ const StockTickerSchema = joi.object({
     })
 }).required();
 
-const datasourceOptions = {
-    logger,
-    validationSchema: StockTickerSchema
+const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
+
+// let t = ['APPL', 'TSLA', 'AMZN', 'ABNB', 'DASH'];
+let t = []
+
+for (let ticker of data) {
+    t.push(ticker);
 }
 
-const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
+const datasourceOptions = {
+    logger,
+    validationSchema: StockTickerSchema,
+    subscribeTicker: t
+}
+
+const datastore = new MemoryDataStore({
+    logger
+});
+
+const datasource = new PolygonLiveDataSource(datasourceOptions);
 
 const exchange = new PhonyExchange({
     logger
 });
 
-const notification = new PhonyNotification();
+const notification = new PhonyNotification({
+    logger
+});
+
 const diagnostic = new PhonyDiagnostic();
 
 const serviceOptions = {
     concurrency: 1,
     logger,
-    workerOptions: {
-        tickTime: 1000
-    },
     datasource,
+    datastore,
     diagnostic,
     exchange,
-    mainWorker: TopGainerNotificationStockWorker,
+    mainWorker: LiveDataStockWorker,
     purchaseOptions: {
         takeProfitPercentage: .015,
         stopLimitPercentage: .05,

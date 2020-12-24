@@ -1,13 +1,15 @@
 import { StockService, IStockServiceOptions, ITickerChange } from '../lib/stock-bot';
 import { TopGainerNotificationStockWorker } from '../lib/workers';
 import winston from 'winston';
-import { Logger } from '../lib/base';
+import { Logger, LogLevel } from '../lib/base';
 import * as assert from 'assert';
 import BPromise from 'bluebird';
-import { AlpacasExchange } from '../lib/exchange';
+import { AlpacasExchange, PhonyExchange } from '../lib/exchange';
 import * as joi from 'joi';
 import * as D from '../lib/data-source';
 import * as N from '../lib/notification';
+import { PhonyDataStore } from '../lib/data-store';
+import { PhonyDiagnostic } from '../lib/diagnostic';
 
 const logger: Logger = winston.createLogger({ transports: [ new winston.transports.Console() ] });
 
@@ -19,7 +21,7 @@ const baseOptions: D.IDataSourceOptions = {
     })
 }
 
-class FakeDatasource extends D.DataSource {
+class FakeDatasource extends D.DataSource<ITickerChange> {
     constructor(options: D.IDataSourceOptions) {
         super(options);
     }
@@ -30,33 +32,32 @@ class FakeDatasource extends D.DataSource {
 }
 
 const datasource = new FakeDatasource(baseOptions);
+const diagnostic = new PhonyDiagnostic();
 
-// TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
-const exchange = new AlpacasExchange({
-    logger, 
-    keyId: (process.env['ALPACAS_API_KEY'] || ""),
-    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
-    acceptableGain: {
-        unit: 8,
-        type: 'percent'
-    },
-    acceptableLoss: {
-        unit: 1,
-        type: 'percent'
-    }
+const dataStore = new PhonyDataStore({
+    logger
 });
 
-const notification = new N.PhonyNotification();
+// TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
+const exchange = new PhonyExchange({
+    logger
+});
+
+const notification = new N.PhonyNotification({
+    logger
+});
 
 const serviceOptions: IStockServiceOptions = {
-    concurrency: 1,
+    concurrency: 0,
     logger,
     workerOptions: {
         tickTime: 500 //ms
     },
     datasource,
+    //@ts-ignore Right now it expects an instanceof AlpacasExchange
     exchange,
     notification,
+    diagnostic,
     //@ts-ignore
     mainWorker: TopGainerNotificationStockWorker,
     purchaseOptions: {
@@ -77,7 +78,62 @@ let worker: TopGainerNotificationStockWorker;
 describe('#StockService', () => {
     it('Can create a StockService instance', () => {
         service = new StockService(serviceOptions);
+        service.isClosed = true; //Blocks preProcess from recursively running
         assert.strictEqual(service instanceof StockService, true, 'service is not StockService');
+    });
+
+    //Need to find a better way to test this
+    // it('Can initialize the StockService', () => service.initialize());
+
+    it('Can filter out timedout tickers properly', () => {
+        // service.datasource.timeoutTicker('APPL', 60000);
+        service.datasource.timeoutTicker('MSFT', 60000);
+        let TICKER: string = 'MSFT';
+
+        service.fetchWork = function() {
+
+            //The first time this is called, it will output MSFT as the ticker, all the next times, it will be APPL since TICKER variable is only reassigned once
+            return Promise.resolve<ITickerChange[]>([{
+                ticker: TICKER,
+                price: 10000000,
+                percentChange: {
+                    percentChange: 4,
+                    persuasion: 'up'
+                }
+            }])
+            .then((data) => {
+                TICKER = 'APPL';
+                return data;
+            })
+        }
+
+        service.isClosed = false;
+        service.logger.log(LogLevel.INFO, `service.process() called below me`)
+        return service.fetchWork() //Fill this.processables
+        .then(() => service.preProcess()) //Make sure the work passes through the filter logic
+        .then(work => {
+            //Assert we only recieve APPL, and that the MSFT piece of work was filtered out of the array
+            assert.deepStrictEqual(service['processables'].length === 0, true, 'service.processables.length is not 0');
+            assert.deepStrictEqual(work.ticker === 'APPL', true, 'The received ticker is not APPL');
+            return service.close();
+        })
+        .then(() => {
+            Object.keys(service.datasource.timedOutTickers).forEach(key => {
+                service.datasource.timedOutTickers.delete(key);
+            });
+        })
+        .then(() => {
+            service.isClosed = false;
+        })
+        .then(() => service.preProcess())
+        .then(work => {
+            assert.deepStrictEqual(work.ticker === 'APPL', true);
+            return service.close()
+        });
+    }).timeout(10000);
+
+    it('Can close the StockService', () => {
+        return service.close();
     });
 });
 
@@ -85,7 +141,8 @@ describe('#StockService', () => {
 describe('#StockWorker', () => {
     it('Can create a StockServiceWorker instance', () => {
         worker = new TopGainerNotificationStockWorker({
-            _preProcessor: () => service.preProcess(),
+            //@ts-ignore //UNUSED
+            _preProcessor: () => {},
             id: 'TEST',
             logger,
             tickTime: 1000,
@@ -99,8 +156,11 @@ describe('#StockWorker', () => {
                     unit: 1
                 }
             },
+            dataStore,
             notification,
+            //@ts-ignore Expects instanceof AlpacasExchange
             exchange,
+            dataSource: datasource,
             exceptionHandler: (err: Error) => {}
         });
         assert.strictEqual(worker instanceof TopGainerNotificationStockWorker, true);

@@ -11,10 +11,13 @@ import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
 import { INotification } from './notification';
 import * as W from './workers';
+import { IDataStore } from './data-store';
 import { IDiagnostic } from './diagnostic';
+
 
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
+    datastore: joi.required(), //TODO: Need a better way to type this
     diagnostic: joi.object().required(), //TODO: Need a better way to type this
     exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
@@ -28,13 +31,10 @@ export const StockBotOptionsValidationSchema = joi.object({
             unit: joi.number().required(),
             measurement: joi.string().required()
         }).length(2).required()
-    }).length(5).required(),
+    }).length(5),
     //Worker Options
     concurrency: joi.number().required(),
-    logger: joi.object().required(), //Winston is not actually a class,
-    workerOptions: joi.object({
-        tickTime: joi.number().required()
-    }).required()
+    logger: joi.object().required() //Winston is not actually a class
 })
 
 export interface ITickerChange {
@@ -46,9 +46,11 @@ export interface ITickerChange {
 
 export interface IStockServiceOptions extends IServiceOptions {
     datasource: IDataSource;
+    datastore: IDataStore;
     diagnostic: IDiagnostic;
     notification: INotification;
-    exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
+    exchange: AlpacasExchange;
+    // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
     mainWorker: W.IStockWorker<ITickerChange>; //This is how we pass different algorithms to the service
 }
@@ -73,16 +75,18 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     private processables: ITickerChange[];
     private purchaseOptions: IPurchaseOptions;
     private mainWorker: W.IStockWorker<ITickerChange>;
-
-    exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
+    exchange: AlpacasExchange;
+    // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
     diagnostic: IDiagnostic;
     datasource: IDataSource;
+    datastore: IDataStore;
     notification: INotification;
 
     constructor(options: IStockServiceOptions) {
         super(options);
         this.exchange = options.exchange;
         this.datasource = options.datasource;
+        this.datastore = options.datastore;
         this.diagnostic = options.diagnostic;
         this.notification = options.notification;
         this.purchaseOptions = options.purchaseOptions;
@@ -91,53 +95,64 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     }
 
     initialize(): Promise<void> {
-        return Promise.all([ super.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.exchange.initialize(), this.notification.initialize() ])
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
+        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize() ])
+        .then(() => super.initialize())
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
         });
     }
 
-    _fetchHighIncreasedTickers = (): Promise<ITickerChange[]> => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#_fetchHighIncreasedTickers():CALLED`);
+    fetchWork = (): Promise<ITickerChange[]> => {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#fetchWork():CALLED`);
         return this.datasource.scrapeDatasource()
-        .then(tickers => {
-            //Filters out tickers that are already timed out, and tickers who's price per share is above our threshold
-            //TODO: We should look into this. This code seems to be duplicated all through this Bot, and should be able to be condensed to one spot. If nothing else, the code should become a function.  
-            const keys = Array.from(this.datasource.timedOutTickers.keys());     
-            return tickers.filter((tkr: ITickerChange) => !keys.includes(tkr.ticker));
-        })
         .catch((err: Error) => {
             this.logger.log(LogLevel.ERROR, JSON.stringify(err), err)
             this.logger.log(LogLevel.ERROR, `Failed to scrape data source, backing off and retrying`);
-            return promiseRetry(() => this._fetchHighIncreasedTickers());
-        })
+            return promiseRetry(() => this.fetchWork());
+        });
     }
+
+
+    /*
+        All this function does is verify that the processable work array has data in it.. this is later on called by the Worker class before process
+        This should simply be a function for fetching work in a service, the only time a worker should have it process method invoked, is if there is data to supply to it.
+    */
 
     preProcess = async (): Promise<ITickerChange> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
         let marketIsOpen = (await this.exchange.isMarketTime());
 
+        if (this.isClosed) {
+            return Promise.reject(new exception.ServiceClosed());
+        }
+
         if(!marketIsOpen) {
-            this.logger.log(LogLevel.INFO, 'Market is currently closed. Delaying next try by 30 minutes.')
-            return BPromise.delay(30 * 60000).then(() => this.preProcess());
+            this.logger.log(LogLevel.INFO, 'Market is currently closed. Delaying next try by 5 minutes.')
+            return BPromise.delay(5 * 60000).then(() => this.preProcess());
         } // else continue
 
         if(this.processables.length > 0) {
-            let ticker = this.processables[0];
-            this.datasource.timeoutTicker(ticker.ticker);
+            let ticker = this.processables.shift()!;
 
-            this.logger.log(LogLevel.TRACE, `Taking ${ticker.ticker} out of this.processables, pushing ticker to this.process(${ticker.ticker})`)
+            // this.logger.log(LogLevel.TRACE, `Taking ${JSON.stringify(ticker)} out of this.processables, pushing ticker to this.process(${JSON.stringify(ticker)})`);
             //Now update what is processable
-            const keys = Array.from(this.datasource.timedOutTickers.keys());     
-            this.processables = this.processables.filter((tkr: ITickerChange) => !keys.includes(tkr.ticker));
+            const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
+            //@ts-ignore
+            this.datasource.timeoutTicker(ticker.sym, 180)
+            //TODO: This should *ONLY* be done everytime that we fetchWork().. we duplicate and expontentially increase the amount of work to be done by doing this here.
+            //@ts-ignore
+            this.processables = this.processables.filter((tkr: ITickerChange) => !keys.includes(tkr.sym));
             return Promise.resolve(ticker);
         } else {
+            // this.logger.log(LogLevel.INFO, `this.processables.length = ${this.processables.length}`);
             //Resupply the the work array, and try to process work again
-            return this._fetchHighIncreasedTickers()
+            return this.fetchWork()
             .then((tickers: ITickerChange[]) => {
                 //This filters out tickers that are timed out.
-                const keys = Array.from(this.datasource.timedOutTickers.keys());     
+                const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
                 this.processables = tickers.filter((ticker: ITickerChange) => !keys.includes(ticker.ticker));
+                this.logger.log(LogLevel.INFO, `this.processables.length after filter = ${this.processables.length}`)
 
                 //TODO: The current problem we have here, is that if we have multiple workers, when `this.preProcess()` is called, 
                 // Each worker will then call the Yahoo API again, and refill the `this.processable` Array with all of the same tickers. 
@@ -150,37 +165,41 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
                 if(!(this.processables.length > 0)) {
                     //TODO: This logic should be moved to _fetchTickerInfo
                     //NOTE: This is some edgecase code
-                    const keys = Array.from(this.datasource.timedOutTickers.keys());     
+                    const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
                     if(this.processables.some((ticker: ITickerChange) => !keys.includes(ticker.ticker))) {
-                        this.logger.log(LogLevel.TRACE, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
+                        this.logger.log(LogLevel.INFO, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
                         const pendingPromises = Array.from(this.datasource.timedOutTickers.values()).map(p => p.promise);
 
                         return Promise.all(pendingPromises)
                         .then(() => this.preProcess());
                     } else {
-                        //TODO: Instead of immediately trying to scrape, we should create a "backoffPromise" that is just a setTimeout, and we should check if it is present instead. This way, all workers can be on the same backoff as well
-                        this.logger.log(LogLevel.INFO, `We are currently on a backoff of 5 seconds to refetch new tickers.`);
-                        return promiseRetry(() => this.preProcess(), 500);
+                        this.logger.log(LogLevel.INFO, `this.processables.length = 0, return the backoff promise`);
+                        return BPromise.delay(5000).then(() => this.preProcess())
                     }
                 } else {
-                    this.logger.log(LogLevel.TRACE, `Nothing in this.processables, instead retrying this.preProcess()`)
+                    this.logger.log(LogLevel.INFO, `Nothing in this.processables, instead retrying this.preProcess()`);
                     return this.preProcess();
                 }
             })
             .catch(err => {
-                this.logger.log(LogLevel.ERROR, `Error caught in preprocess -> ${err}`);
+                this.logger.log(LogLevel.ERROR, `this.preProcess():ERROR -> ${err}`);
                 throw err;
             });
         }
     }
 
     makeWorker(options: IWorkerOptions): IWorker<ITickerChange> {
+        //TODO: Update this typing
+        //@ts-ignore
         return new this.mainWorker({
             ...options,
+            _preProcessor: this.preProcess,
             exceptionHandler: this.exceptionHandler,
             purchaseOptions: this.purchaseOptions,
             exchange: this.exchange,
-            notification: this.notification
+            notification: this.notification,
+            dataSource: this.datasource,
+            dataStore: this.datastore
         });
     }
 
@@ -189,6 +208,9 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         if(err.name === exception.UnprocessableTicker.name) {
             this.logger.log(LogLevel.WARN, `Missing properties, timing out ${err.message}`)
             this.datasource.timeoutTicker(err.message); //Here, with that particular error, the message will be the TICKER
+        } else if (err.name === exception.ServiceClosed.name) {
+            //Do nothing
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#exceptionHandler - Received ServiceClosed error from Worker Process.`);
         } else {
             this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`);
             this.diagnostic.alert({

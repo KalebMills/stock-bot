@@ -14,7 +14,7 @@ const logger =  winston.createLogger({
 let fakeDataSourceInstance: D.IDataSource;
 
 describe('#DataSource abstract class', () => {
-    class FakeDatasource extends D.DataSource {
+    class FakeDatasource extends D.DataSource<ITickerChange> {
         constructor(options: D.IDataSourceOptions) {
             super(options);
         }

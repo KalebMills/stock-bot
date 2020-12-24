@@ -1,4 +1,4 @@
-import { MemoryDataStore, RedisDataStore } from '../lib/data-store';
+import { DataStoreObject, MemoryDataStore, RedisDataStore } from '../lib/data-store';
 import { inCI, runCmd } from '../lib/util';
 import * as chai from 'chai';
 import { DefaultError, isErrorType, NotFoundError } from '../lib/exceptions';
@@ -8,6 +8,9 @@ import winston from 'winston';
 const CONSTRUCT_DOCKER_REDIS = () => runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
 const DESTORY_DOCKER_REDIS = () => runCmd('docker rm -f TEST_REDIS_DB');
 
+const logger = winston.createLogger({
+    transports: [ new winston.transports.Console() ]
+})
 
 
 describe('#MemoryDataStore', () => {
@@ -18,7 +21,9 @@ describe('#MemoryDataStore', () => {
     let store: MemoryDataStore;
     
     it('Can construct MemoryDataStore', () => {
-        store = new MemoryDataStore();
+        store = new MemoryDataStore({
+            logger
+        });
         chai.assert.instanceOf(store, MemoryDataStore);
     });
 
@@ -27,18 +32,29 @@ describe('#MemoryDataStore', () => {
     });
 
     it('Can save data in MemoryDataStore', () => {
-        const data = {
-            'test': 'data'
-        };
-
         return store.save(TEST_KEY, TEST_DATA);
     });
 
     it('Can get data from MemoryDataStore', () => {
         return store.get(TEST_KEY)
         .then(data => {
-            chai.assert.deepEqual(data, TEST_DATA);
+            chai.assert.deepEqual(data, [ TEST_DATA ]);
         });
+    });
+
+    it('Can save lots of data in the MemoryDataStore', () => {
+        let promises: Promise<any>[] = [];
+        for (let i = 1; i <= 1000; i++) {
+            let key = uuid.v4();
+            let val = uuid.v4();
+            promises.push(store.save(key, { val }))
+        }
+        return Promise.all(promises);
+    });
+
+    it('Has the expected number of keys', () => {
+        return store.get("*")
+        .then(data => chai.assert.equal(data.length, 1001));
     });
 
     it('Can delete data in MemoryDataStore', () => {
@@ -57,11 +73,11 @@ describe('#MemoryDataStore', () => {
 });
 
 describe('#RedisDataStore', () => {
-    let store: RedisDataStore;
+    let store: RedisDataStore<DataStoreObject, DataStoreObject>;
     const TEST_KEY: string = uuid.v4();
-    const TEST_DATA = {
+    const TEST_DATA = [{
         'TEST': 'DATA'
-    };
+    }];
 
     if (!inCI()) {
         before(() => CONSTRUCT_DOCKER_REDIS());

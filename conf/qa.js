@@ -1,12 +1,14 @@
 const joi = require('joi');
-const { YahooGainersDataSource, PolygonGainersLosersDataSource } = require('../lib/data-source');
+const { PolygonLiveDataSource } = require('../lib/data-source');
+const { RedisDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const discord = require('discord.js');
-const { AlpacasExchange, PhonyExchange } = require('../lib/exchange');
+const { PhonyExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
 const { DiscordNotification } = require('../lib/notification');
-const { TopGainerNotificationStockWorker } = require('../lib/workers');
+const { LiveDataStockWorker } = require('../lib/workers');
+const fs = require('fs');
 
 const logger = winston.createLogger({
     transports: [
@@ -23,23 +25,30 @@ const logger = winston.createLogger({
     )
 });
 
-const StockTickerSchema = joi.object({
-    ticker: joi.string().required(),
-    price: joi.number().required(),
-    percentChange: joi.object({
-        percentChange: joi.number().required(),
-        persuasion: joi.string().required() //TODO: Make this also validate the only two options
-    })
-}).required();
+const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
+
+let t = [];
+
+for (let ticker of data) {
+    t.push(ticker);
+}
 
 const datasourceOptions = {
     logger,
-    validationSchema: StockTickerSchema
+    //TODO: This needs to be changed to be an abstract method of the DataSource class
+    validationSchema: joi.object({}),
+    subscribeTicker: t
 }
 
 const DISCORD_CLIENT = new discord.Client({});
 
-const datasource = new PolygonGainersLosersDataSource(datasourceOptions);
+const datasource = new PolygonLiveDataSource(datasourceOptions);
+
+const datastore = new RedisDataStore({
+    host: 'localhost',
+    port: 6379,
+    logger
+});
 
 const diagnostic = new DiscordDiagnosticSystem({
     logger,
@@ -49,39 +58,30 @@ const diagnostic = new DiscordDiagnosticSystem({
     client: DISCORD_CLIENT
 });
 
+
 const exchange = new PhonyExchange({
-    logger
+    logger,
 });
 
 const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
-    token: (process.env['DISCORD_API_TOKEN'] || ""),
+    token: (process.env['DISCORD_API_KEY'] || ""),
     channelName: 'stock-notifications',
     client: DISCORD_CLIENT
 });
 
+
 const serviceOptions = {
     concurrency: 1,
     logger,
-    workerOptions: {
-        tickTime: 1000
-    },
     datasource,
+    datastore,
     diagnostic,
     exchange,
-    mainWorker: TopGainerNotificationStockWorker,
-    purchaseOptions: {
-        takeProfitPercentage: .015,
-        stopLimitPercentage: .05,
-        maxShareCount: 100,
-        maxSharePrice: 20.00, //TODO: While we aren't using Alpaca to do the trading, let's simply make it this so we can get more tickers to look at manually on Robinhood
-        prevStockPriceOptions: {
-            unit: 1,
-            measurement: "hour"
-        }
-    },
+    mainWorker: LiveDataStockWorker,
     notification
 };
+
 
 module.exports = serviceOptions;
