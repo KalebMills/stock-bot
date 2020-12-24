@@ -25,15 +25,6 @@ const logger = winston.createLogger({
     )
 });
 
-const StockTickerSchema = joi.object({
-    ticker: joi.string().required(),
-    price: joi.number().required(),
-    percentChange: joi.object({
-        percentChange: joi.number().required(),
-        persuasion: joi.string().required() //TODO: Make this also validate the only two options
-    })
-}).required();
-
 const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
 
 let t = [];
@@ -51,11 +42,7 @@ const datasourceOptions = {
 
 const DISCORD_CLIENT = new discord.Client({});
 
-const datasource = new PolygonLiveDataSource({
-    logger,
-    subscribeTicker: t,
-    validationSchema: joi.object({})
-});
+const datasource = new PolygonLiveDataSource(datasourceOptions);
 
 const datastore = new RedisDataStore({
     host: 'localhost',
@@ -71,6 +58,7 @@ const diagnostic = new DiscordDiagnosticSystem({
     client: DISCORD_CLIENT
 });
 
+
 const exchange = new PhonyExchange({
     logger,
 });
@@ -83,8 +71,9 @@ const notification = new DiscordNotification({
     client: DISCORD_CLIENT
 });
 
+
 const serviceOptions = {
-    concurrency: 2,
+    concurrency: 1,
     logger,
     datasource,
     datastore,

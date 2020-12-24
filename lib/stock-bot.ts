@@ -147,7 +147,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             return this.fetchWork()
             .then((tickers: ITickerChange[]) => {
                 //This filters out tickers that are timed out.
-                const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
+                const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
                 this.processables = tickers.filter((ticker: ITickerChange) => !keys.includes(ticker.ticker));
                 this.logger.log(LogLevel.INFO, `this.processables.length after filter = ${this.processables.length}`)
 

@@ -43,22 +43,33 @@ let exchange = new exchange_1.AlpacasExchange({
 });
 let notification = new notification_1.PhonyNotification({ logger });
 let datastore = new data_store_1.PhonyDataStore({ logger });
-const QUOTE_EVENT = {
-    "ev": "Q",
+// const QUOTE_EVENT: QuoteEvent = {
+//         "ev": "Q",              // Event Type
+//         "sym": "MSFT",          // Symbol Ticker
+//         "bx": 4,                // Bix Exchange ID
+//         "bp": 114.125,          // Bid Price
+//         "bs": 100,              // Bid Size
+//         "ax": 7,                // Ask Exchange ID
+//         "ap": 114.128,          // Ask Price
+//         "as": 160,              // Ask Size
+//         "c": 0,                 // Quote Condition
+//         "t": 1536036818784      // Quote Timestamp ( Unix MS )
+//     }
+const TRADE_EVENT = {
+    "ev": "T",
     "sym": "MSFT",
-    "bx": 4,
-    "bp": 114.125,
-    "bs": 100,
-    "ax": 7,
-    "ap": 114.128,
-    "as": 160,
-    "c": 0,
-    "t": 1536036818784 // Quote Timestamp ( Unix MS )
+    "x": 4,
+    "i": "12345",
+    "z": 3,
+    "p": 114.125,
+    "s": 100,
+    "c": [0, 12],
+    "t": 1536036818784 // Trade Timestamp ( Unix MS )
 };
 //@ts-ignore annoying typing error for some reason
 let datasource = new data_source_1.PhonyDataSource({
     logger,
-    returnData: QUOTE_EVENT,
+    returnData: TRADE_EVENT,
     validationSchema: joi.object(),
 });
 describe('#LiveDataStockWorker', () => {
@@ -88,7 +99,7 @@ describe('#LiveDataStockWorker', () => {
                 takeProfitPercentage: 2
             },
             exceptionHandler: (err) => { },
-            _preProcessor: () => Promise.resolve(QUOTE_EVENT),
+            _preProcessor: () => Promise.resolve(TRADE_EVENT),
             dataSource: datasource
         });
         chai.assert.instanceOf(worker, workers_1.LiveDataStockWorker);
@@ -105,12 +116,12 @@ describe('#LiveDataStockWorker', () => {
                 .then(() => Promise.resolve());
         };
         //This first one should skip processing and just write the event to the datastore
-        return worker.process(QUOTE_EVENT)
+        return worker.process(TRADE_EVENT)
             .then(() => {
-            const NEW_QUOTE_EVENT = Object.assign({}, QUOTE_EVENT);
-            NEW_QUOTE_EVENT.ap = 1000;
-            NEW_QUOTE_EVENT.t = QUOTE_EVENT.t + 1800;
-            return worker.process(NEW_QUOTE_EVENT)
+            const NEW_TRADE_EVENT = Object.assign({}, TRADE_EVENT);
+            NEW_TRADE_EVENT.p = 1000;
+            NEW_TRADE_EVENT.t = TRADE_EVENT.t + 1800;
+            return worker.process(NEW_TRADE_EVENT)
                 .then(() => datastore.get('PURCHASE_MSFT'))
                 .then((data) => {
                 if (!(data.length > 0)) {

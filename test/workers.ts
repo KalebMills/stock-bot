@@ -6,6 +6,7 @@ import { PhonyDataStore } from '../lib/data-store';
 import * as util from '../lib/util';
 import * as joi from 'joi';
 import * as chai from 'chai';
+import { Trade } from '@master-chief/alpaca/types/entities';
 
 let logger = util.createLogger({});
 
@@ -25,23 +26,35 @@ let exchange = new AlpacasExchange({
 let notification = new PhonyNotification({ logger });
 let datastore = new PhonyDataStore({ logger });
 
-const QUOTE_EVENT: QuoteEvent = {
-        "ev": "Q",              // Event Type
-        "sym": "MSFT",          // Symbol Ticker
-        "bx": 4,                // Bix Exchange ID
-        "bp": 114.125,          // Bid Price
-        "bs": 100,              // Bid Size
-        "ax": 7,                // Ask Exchange ID
-        "ap": 114.128,          // Ask Price
-        "as": 160,              // Ask Size
-        "c": 0,                 // Quote Condition
-        "t": 1536036818784      // Quote Timestamp ( Unix MS )
-    }
+// const QUOTE_EVENT: QuoteEvent = {
+//         "ev": "Q",              // Event Type
+//         "sym": "MSFT",          // Symbol Ticker
+//         "bx": 4,                // Bix Exchange ID
+//         "bp": 114.125,          // Bid Price
+//         "bs": 100,              // Bid Size
+//         "ax": 7,                // Ask Exchange ID
+//         "ap": 114.128,          // Ask Price
+//         "as": 160,              // Ask Size
+//         "c": 0,                 // Quote Condition
+//         "t": 1536036818784      // Quote Timestamp ( Unix MS )
+//     }
+
+const TRADE_EVENT: TradeEvent = {
+    "ev": "T",              // Event Type
+    "sym": "MSFT",          // Symbol Ticker
+    "x": 4,                 // Exchange ID
+    "i": "12345",           // Trade ID
+    "z": 3,                 // Tape ( 1=A 2=B 3=C)
+    "p": 114.125,           // Price
+    "s": 100,               // Trade Size
+    "c": [0, 12],           // Trade Conditions
+    "t": 1536036818784      // Trade Timestamp ( Unix MS )
+}
 
 //@ts-ignore annoying typing error for some reason
-let datasource: PhonyDataSource<QuoteEvent> = new PhonyDataSource<QuoteEvent>({
+let datasource: PhonyDataSource<TradeEvent> = new PhonyDataSource<TradeEvent>({
     logger,
-    returnData: QUOTE_EVENT,
+    returnData: TRADE_EVENT,
     validationSchema: joi.object(),
 });
 
@@ -75,7 +88,7 @@ describe('#LiveDataStockWorker', () => {
                 takeProfitPercentage: 2
             },
             exceptionHandler: (err) => {},
-            _preProcessor: () => Promise.resolve(QUOTE_EVENT),
+            _preProcessor: () => Promise.resolve(TRADE_EVENT),
             dataSource: datasource
         });
 
@@ -97,13 +110,13 @@ describe('#LiveDataStockWorker', () => {
         }
 
         //This first one should skip processing and just write the event to the datastore
-        return worker.process(QUOTE_EVENT)
+        return worker.process(TRADE_EVENT)
         .then(() => {
-            const NEW_QUOTE_EVENT: QuoteEvent = { ...QUOTE_EVENT };
-            NEW_QUOTE_EVENT.ap = 1000;
-            NEW_QUOTE_EVENT.t = QUOTE_EVENT.t + 1800;
+            const NEW_TRADE_EVENT: TradeEvent = { ...TRADE_EVENT };
+            NEW_TRADE_EVENT.p = 1000;
+            NEW_TRADE_EVENT.t = TRADE_EVENT.t + 1800;
 
-            return worker.process(NEW_QUOTE_EVENT)
+            return worker.process(NEW_TRADE_EVENT)
             .then(() => datastore.get('PURCHASE_MSFT'))
             .then((data) => {
                 if (!(data.length > 0)) {
