@@ -7,7 +7,7 @@
     "lib": "lib"
   },
   "scripts": {
-    "start": "node -r dotenv/config ./bin/stock-bot.js",
+    "start": "node --max-old-space-size=1536 -r dotenv/config ./bin/stock-bot.js",
     "test": "node_modules/.bin/mocha",
     "build": "./node_modules/.bin/tsc --project ./tsconfig.json"
   },
