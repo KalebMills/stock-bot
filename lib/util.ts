@@ -74,19 +74,18 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
 export const _returnLastOpenDay = (): number => {
     let date = new Date()
     date.setDate(date.getDate() - 1)
-    while(true) {
-        if(_getMarketStatusOnDate(date) === 'OPEN') {
-            return date.getDate()
-        }
+    while(_getMarketStatusOnDate(date) !== 'OPEN') {
         date.setDate(date.getDate() - 1)
     }
+    return date.getDate()
     
 }
 
+//TODO - typing
 export const _getMarketStatusOnDate = (date: Date): string => {
-    const isWeekend = date.getDay() % 6
-    const holidays = _getMarketHolidays()
-    const isHoliday = holidays.filter((holiday: any) => {
+    const isWeekend: boolean = date.getDay() % 6 == 0 ? true: false
+    const holidays: any[] = _getMarketHolidays()
+    const isHoliday: boolean = holidays.some((holiday: any) => {
         let holidayDate = new Date(Date.parse(holiday.date))
         return holidayDate.getDate() == date.getDate() &&
         holidayDate.getMonth() == date.getMonth()
