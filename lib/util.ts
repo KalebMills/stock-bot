@@ -96,14 +96,16 @@ export const _getMarketStatusOnDate = (date: Date): string => {
 
 //TODO - typing
 export const _getMarketHolidays = (): any => {
-    return axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
+    let holidays: any[] = []
+    axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
         params: {
             apiKey: process.env['ALPACAS_API_KEY'] || "",
         }
-    }).then((data: AxiosResponse) => data)
+    }).then((data: AxiosResponse) => { holidays = data.data})
     .catch(err => {
         throw new InvalidDataError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`)
     })
+    return holidays
 }
 
 export const _convertDate = (date: Date): string => {
