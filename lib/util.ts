@@ -90,7 +90,7 @@ export const _getMarketStatusOnDate = (date: Date): string => {
         return holidayDate.getDate() == date.getDate() &&
         holidayDate.getMonth() == date.getMonth()
     })
-    return (isHoliday || isWeekend) ? 'OPEN' : 'CLOSED'
+    return (isHoliday || isWeekend) ? 'CLOSED' : 'OPEN'
 }
 
 //TODO - typing
