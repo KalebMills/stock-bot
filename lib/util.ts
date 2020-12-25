@@ -75,7 +75,7 @@ export const _returnLastOpenDay = (): number => {
     let date = new Date()
     date.setDate(date.getDate() - 1)
     while(true) {
-        if(_getMarketStatusOfDate(date)) {
+        if(_getMarketStatusOnDate(date) === 'OPEN') {
             return date.getDate()
         }
         date.setDate(date.getDate() - 1)
@@ -83,7 +83,7 @@ export const _returnLastOpenDay = (): number => {
     
 }
 
-export const _getMarketStatusOfDate = (date: Date): boolean => {
+export const _getMarketStatusOnDate = (date: Date): string => {
     const isWeekend = date.getDay() % 6
     const holidays = _getMarketHolidays()
     const isHoliday = holidays.filter((holiday: any) => {
@@ -91,7 +91,7 @@ export const _getMarketStatusOfDate = (date: Date): boolean => {
         return holidayDate.getDate() == date.getDate() &&
         holidayDate.getMonth() == date.getMonth()
     })
-    return isHoliday == isWeekend
+    return (isHoliday || isWeekend) ? 'OPEN' : 'CLOSED'
 }
 
 //TODO - typing
@@ -120,6 +120,7 @@ export const _convertDate = (date: Date): string => {
 export const _minutesSinceOpen = (): number => {
     const now = new Date()
     const marketOpen = new Date()
+    //TODO - definitely needs to be changed, set this to market open at UTC... Was thinking of using moment but it seems to be deprecated. Thoughts?
     marketOpen.setHours(14)
     marketOpen.setMinutes(30)
     const minutesPassed = Math.round((now.getTime() - marketOpen.getTime())/60000)

@@ -284,15 +284,13 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
     //TODO: this needs to be cleaned up
     private _getRelativeVolume (ticker: string): number {
-        const now = new Date()
-        const todaysDate = _convertDate(now)
-
         const lastDay = new Date()
         lastDay.setDate(_returnLastOpenDay())
         const lastDate = _convertDate(lastDay)
 
         const minutesPassed = _minutesSinceOpen()
 
+        // better way to do this instead of declaring the vars before hand? Does the axios call have to be within a function to be chained and returned properly?
         let lastDayVolume: number = 0
         let todaysVolume: number = 0
         axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
