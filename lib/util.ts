@@ -1,6 +1,8 @@
+import axios, { AxiosResponse } from 'axios';
 import * as cp from 'child_process';
 import * as winston from 'winston';
 import { Logger } from './base';
+import { InvalidDataError } from './exceptions';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -66,4 +68,60 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
         transports,
         ...options
     })
+}
+
+//TODO - this is messy, need to refactor into something more elegant
+export const _returnLastOpenDay = (): number => {
+    let date = new Date()
+    date.setDate(date.getDate() - 1)
+    while(true) {
+        if(_getMarketStatusOfDate(date)) {
+            return date.getDate()
+        }
+        date.setDate(date.getDate() - 1)
+    }
+    
+}
+
+export const _getMarketStatusOfDate = (date: Date): boolean => {
+    const isWeekend = date.getDay() % 6
+    const holidays = _getMarketHolidays()
+    const isHoliday = holidays.filter((holiday: any) => {
+        let holidayDate = new Date(Date.parse(holiday.date))
+        return holidayDate.getDate() == date.getDate() &&
+        holidayDate.getMonth() == date.getMonth()
+    })
+    return isHoliday == isWeekend
+}
+
+//TODO - typing
+export const _getMarketHolidays = (): any => {
+    return axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
+        params: {
+            apiKey: process.env['ALPACAS_API_KEY'] || "",
+        }
+    }).then((data: AxiosResponse) => data)
+    .catch(err => {
+        throw new InvalidDataError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`)
+    })
+}
+
+export const _convertDate = (date: Date): string => {
+    var yyyy = date.getFullYear().toString();
+    var mm = (date.getMonth()+1).toString();
+    var dd  = date.getDate().toString();
+  
+    var mmChars = mm.split('');
+    var ddChars = dd.split('');
+  
+    return yyyy + '-' + (mmChars[1]?mm:"0"+mmChars[0]) + '-' + (ddChars[1]?dd:"0"+ddChars[0]);
+  }
+
+export const _minutesSinceOpen = (): number => {
+    const now = new Date()
+    const marketOpen = new Date()
+    marketOpen.setHours(14)
+    marketOpen.setMinutes(30)
+    const minutesPassed = Math.round((now.getTime() - marketOpen.getTime())/60000)
+    return minutesPassed
 }

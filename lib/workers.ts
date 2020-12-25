@@ -10,6 +10,9 @@ import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import * as uuid from 'uuid';
 import { IDataSource } from './data-source';
+import { _convertDate, _minutesSinceOpen, _returnLastOpenDay } from './util';
+import { InvalidDataError } from './exceptions';
+import { PolygonSnapshot } from '../types';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -223,23 +226,28 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
                 //If the change percent is greater than .5% per minute, notify
                 if (changePercentPerMinute > .009) {
-                    this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
+                    //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
+                    const relativeVolume = this._getRelativeVolume(currTrade.sym)
+                    if(relativeVolume > 2) {
+                        this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
                     
-                    return this.notification.notify({
-                        ticker: currTrade.sym,
-                        price: currTrade.p,
-                        message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
-                        additionaData: {
-                            'Exchange': this.exchange.constructor.name,
-                            'DataSource': this.datasource.constructor.name,
-                            'Measure Time': `${((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60} Minutes`,
-                            'Previous Price': `${prevTrade.p}`,
-                            'Action Recommendation': 'Purchase',
-                        }
-                    })
-                    .then(() => {
-                        this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
-                    });
+                        return this.notification.notify({
+                            ticker: currTrade.sym,
+                            price: currTrade.p,
+                            message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
+                            additionaData: {
+                                'Exchange': this.exchange.constructor.name,
+                                'DataSource': this.datasource.constructor.name,
+                                'Measure Time': `${((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60} Minutes`,
+                                'Previous Price': `${prevTrade.p}`,
+                                'Action Recommendation': 'Purchase',
+                                'Relative Volume': relativeVolume
+                            }
+                        })
+                        .then(() => {
+                            this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
+                        });
+                    }
                 } else {
                     this.logger.log(LogLevel.TRACE, `${currTrade.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currTrade, prevTrade)}`)
                     return;
@@ -273,4 +281,43 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
     close(): Promise<void> {
         return super.close();
     }
+
+    //TODO: this needs to be cleaned up
+    private _getRelativeVolume (ticker: string): number {
+        const now = new Date()
+        const todaysDate = _convertDate(now)
+
+        const lastDay = new Date()
+        lastDay.setDate(_returnLastOpenDay())
+        const lastDate = _convertDate(lastDay)
+
+        const minutesPassed = _minutesSinceOpen()
+
+        let lastDayVolume: number = 0
+        let todaysVolume: number = 0
+        axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
+            params: {
+                apiKey: process.env['ALPACAS_API_KEY'] || "",
+                sort: 'asc',
+                limit: minutesPassed
+            }
+        }).then((data: AxiosResponse) => { lastDayVolume = data.data.results.reduce((a:any,b:any) => a + b['v'], 0) as number }
+        ).catch(err => {
+            throw new InvalidDataError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`);
+        })
+
+        axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {
+            params: {
+                apiKey: process.env['ALPACAS_API_KEY'] || "",
+            }
+            //TODO: PolygonSnapshot which was typed for top gainers returns an array of tickers, this endpoint is for a single ticker so we can't use that type
+        }).then((data: AxiosResponse<any>) => { todaysVolume = data.data.ticker.day.v}
+        ).catch(err => {
+            throw new InvalidDataError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`);
+        })
+
+        return (todaysVolume / lastDayVolume)
+    }
+
+    
 }
