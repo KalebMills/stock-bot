@@ -339,7 +339,10 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
     _tradeHandler = (data: TradeEvent) => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#data.length = ${this.data.length}`);
         // this.logger.log(LogLevel.TRACE, `QUOTE: ${JSON.stringify(data)}`)
-        this.data.push(data);
+        if (!(this.timedOutTickers.has(data.sym))) {
+            this.data.push(data);
+        }
+        return;
     }
 
     close(): Promise<void> {

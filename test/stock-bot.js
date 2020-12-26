@@ -64,9 +64,8 @@ const notification = new N.PhonyNotification({
 const serviceOptions = {
     concurrency: 0,
     logger,
-    workerOptions: {
-        tickTime: 500 //ms
-    },
+    //@ts-ignore
+    workerOptions: {},
     datasource,
     //@ts-ignore Right now it expects an instanceof AlpacasExchange
     exchange,
@@ -149,7 +148,6 @@ describe('#StockWorker', () => {
             _preProcessor: () => { },
             id: 'TEST',
             logger,
-            tickTime: 1000,
             purchaseOptions: {
                 maxShareCount: 1,
                 maxSharePrice: 1.00,

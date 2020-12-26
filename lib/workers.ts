@@ -220,11 +220,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
             } else {
                 this.logger.log(LogLevel.INFO, `PrevTrade: ${JSON.stringify(data)}`)
                 const [prevTrade]: TradeEvent[] = data;
+                const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
                 this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .009) {
+                if (changePercentPerMinute > .009 && timeTaken >= 180) {
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     const relativeVolume = await this._getRelativeVolume(currTrade.sym)
                     if(relativeVolume > 2) {
