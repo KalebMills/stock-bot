@@ -30,10 +30,8 @@ const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.tx
 let t = [];
 
 data.forEach((ticker, i) => {
-    if (i % 2 == 0 && i <= 1000) {
-        t.push(ticker)
-    }
-})
+    t.push(ticker);
+});
 
 const datasourceOptions = {
     logger,
