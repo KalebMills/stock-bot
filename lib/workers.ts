@@ -8,11 +8,10 @@ import * as exception from './exceptions';
 import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
-import * as uuid from 'uuid';
 import { IDataSource } from './data-source';
 import { _convertDate, _minutesSinceOpen, _returnLastOpenDay } from './util';
-import { InvalidDataError } from './exceptions';
-import { PolygonSnapshot } from '../types';
+import { RequestError } from './exceptions';
+import { PolygonAggregates, PolygonTickerSnapshot } from '../types';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -213,7 +212,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
         return this.datastore.get(currTrade.sym) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
-        .then((data: TradeEvent[]) => {
+        .then(async (data: TradeEvent[]) => {
             if (!(data.length === 1)) {
                 this.logger.log(LogLevel.INFO, `No data in datastore for ${currTrade.sym}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
@@ -227,7 +226,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 //If the change percent is greater than .5% per minute, notify
                 if (changePercentPerMinute > .009) {
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
-                    const relativeVolume = this._getRelativeVolume(currTrade.sym)
+                    const relativeVolume = await this._getRelativeVolume(currTrade.sym)
                     if(relativeVolume > 2) {
                         this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
                     
@@ -282,39 +281,42 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         return super.close();
     }
 
-    //TODO: this needs to be cleaned up
-    private _getRelativeVolume (ticker: string): number {
-        const lastDay = new Date()
-        lastDay.setDate(_returnLastOpenDay())
-        const lastDate = _convertDate(lastDay)
+    /**
+     * Calculates the relative volume.
+     * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
+     * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
+    */
+    private async _getRelativeVolume (ticker: string): Promise<number> {
+        const lastDay: Date = new Date()
+        const yesterday: Date = new Date()
 
-        const minutesPassed = _minutesSinceOpen()
+        yesterday.setDate(yesterday.getDate() - 1)
+        lastDay.setDate(await _returnLastOpenDay(yesterday))
+        
+        const lastDate: string = _convertDate(lastDay)
 
-        // better way to do this instead of declaring the vars before hand? Does the axios call have to be within a function to be chained and returned properly?
-        let lastDayVolume: number = 0
-        let todaysVolume: number = 0
-        axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
-            params: {
-                apiKey: process.env['ALPACAS_API_KEY'] || "",
-                sort: 'asc',
-                limit: minutesPassed
-            }
-        }).then((data: AxiosResponse) => { lastDayVolume = data.data.results.reduce((a:any,b:any) => a + b['v'], 0) as number }
-        ).catch(err => {
-            throw new InvalidDataError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`);
+        const minutesPassed: number = _minutesSinceOpen()
+
+        return Promise.all([
+            axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
+                params: {
+                    apiKey: process.env['ALPACAS_API_KEY'] || "",
+                    sort: 'asc',
+                    limit: minutesPassed
+                }
+            }), axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {
+                params: {
+                    apiKey: process.env['ALPACAS_API_KEY'] || "",
+                }
+            })
+        ])
+        .then((data: AxiosResponse<any>[]) => { 
+            const lastDay: PolygonAggregates = data[0].data
+            const today: PolygonTickerSnapshot = data[1].data
+            return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.ticker.day.v)
+        }).catch(err => {
+            throw new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`);
         })
-
-        axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {
-            params: {
-                apiKey: process.env['ALPACAS_API_KEY'] || "",
-            }
-            //TODO: PolygonSnapshot which was typed for top gainers returns an array of tickers, this endpoint is for a single ticker so we can't use that type
-        }).then((data: AxiosResponse<any>) => { todaysVolume = data.data.ticker.day.v}
-        ).catch(err => {
-            throw new InvalidDataError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`);
-        })
-
-        return (todaysVolume / lastDayVolume)
     }
 
     

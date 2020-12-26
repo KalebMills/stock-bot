@@ -6,7 +6,6 @@ import { PhonyDataStore } from '../lib/data-store';
 import * as util from '../lib/util';
 import * as joi from 'joi';
 import * as chai from 'chai';
-import { Trade } from '@master-chief/alpaca/types/entities';
 
 let logger = util.createLogger({});
 

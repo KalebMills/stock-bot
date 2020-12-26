@@ -2,7 +2,8 @@ import axios, { AxiosResponse } from 'axios';
 import * as cp from 'child_process';
 import * as winston from 'winston';
 import { Logger } from './base';
-import { InvalidDataError } from './exceptions';
+import { RequestError } from './exceptions';
+import { PolygonMarketHolidays } from '../types/polygonMarketHolidays';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -10,6 +11,8 @@ export interface IDeferredPromise {
     promise: Promise<any>;
     cancellable: Function;
 }
+
+export type MarketStatus = "OPEN" | "CLOSED"
 
 export const createDeferredPromise = (): IDeferredPromise => {
     //@ts-ignore
@@ -70,21 +73,18 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
     })
 }
 
-//TODO - this is messy, need to refactor into something more elegant
-export const _returnLastOpenDay = (): number => {
-    let date = new Date()
-    date.setDate(date.getDate() - 1)
-    while(_getMarketStatusOnDate(date) !== 'OPEN') {
+export const _returnLastOpenDay = async (date: Date): Promise<number> => {
+    if(await _getMarketStatusOnDate(date) === 'CLOSED') {
         date.setDate(date.getDate() - 1)
+        await _returnLastOpenDay(date)
     }
     return date.getDate()
     
 }
 
-//TODO - typing
-export const _getMarketStatusOnDate = (date: Date): string => {
+export const _getMarketStatusOnDate = async (date: Date): Promise<MarketStatus> => {
     const isWeekend: boolean = date.getDay() % 6 == 0 ? true: false
-    const holidays: any[] = _getMarketHolidays()
+    let holidays: PolygonMarketHolidays[] = await _getMarketHolidays().then((data: AxiosResponse) => data.data)
     const isHoliday: boolean = holidays.some((holiday: any) => {
         let holidayDate = new Date(Date.parse(holiday.date))
         return holidayDate.getDate() == date.getDate() &&
@@ -93,37 +93,35 @@ export const _getMarketStatusOnDate = (date: Date): string => {
     return (isHoliday || isWeekend) ? 'CLOSED' : 'OPEN'
 }
 
-//TODO - typing
-export const _getMarketHolidays = (): any => {
-    let holidays: any[] = []
-    axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
+export const _getMarketHolidays = (): Promise<AxiosResponse> => {
+    return axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
         params: {
             apiKey: process.env['ALPACAS_API_KEY'] || "",
         }
-    }).then((data: AxiosResponse) => { holidays = data.data})
-    .catch(err => {
-        throw new InvalidDataError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`)
     })
-    return holidays
+    .then((data: AxiosResponse)=>data)
+    .catch(err => {
+        throw new RequestError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`)
+    })
 }
 
 export const _convertDate = (date: Date): string => {
-    var yyyy = date.getFullYear().toString();
-    var mm = (date.getMonth()+1).toString();
-    var dd  = date.getDate().toString();
+    var yyyy: string = date.getFullYear().toString();
+    var mm: string = (date.getMonth()+1).toString();
+    var dd: string  = date.getDate().toString();
   
-    var mmChars = mm.split('');
-    var ddChars = dd.split('');
+    var mmChars: string[] = mm.split('');
+    var ddChars: string[] = dd.split('');
   
     return yyyy + '-' + (mmChars[1]?mm:"0"+mmChars[0]) + '-' + (ddChars[1]?dd:"0"+ddChars[0]);
   }
 
 export const _minutesSinceOpen = (): number => {
-    const now = new Date()
-    const marketOpen = new Date()
-    //TODO - definitely needs to be changed, set this to market open at UTC... Was thinking of using moment but it seems to be deprecated. Thoughts?
+    const now: Date = new Date()
+    const marketOpen: Date = new Date()
+    //TODO - definitely needs to be changed, set this to market open at UTC, will need to account for daylight savings
     marketOpen.setHours(14)
     marketOpen.setMinutes(30)
-    const minutesPassed = Math.round((now.getTime() - marketOpen.getTime())/60000)
+    const minutesPassed: number = Math.round((now.getTime() - marketOpen.getTime())/60000)
     return minutesPassed
 }
