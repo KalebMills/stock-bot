@@ -88,7 +88,6 @@ describe('#LiveDataStockWorker', () => {
             logger,
             id: 'TEST',
             notification,
-            tickTime: 0,
             purchaseOptions: {
                 maxShareCount: 1,
                 maxSharePrice: 1,

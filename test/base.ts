@@ -85,7 +85,11 @@ describe('#Base Service', () => {
             concurrency: WORKER_COUNT,
             logger,
             workerOptions: {
-                tickTime: 1000
+                logger,
+                id: 'TEST',
+                //@ts-ignore
+                _preProcessor: () => Promise.resolve(),
+                exceptionHandler: () => {}
             }
         });
 

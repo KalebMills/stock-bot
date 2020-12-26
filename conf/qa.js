@@ -29,9 +29,9 @@ const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.tx
 
 let t = [];
 
-for (let ticker of data) {
+data.forEach((ticker, i) => {
     t.push(ticker);
-}
+});
 
 const datasourceOptions = {
     logger,

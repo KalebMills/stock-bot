@@ -46,7 +46,7 @@ export interface IService<IWorker> extends IInitializable, ICloseable {
 
 export interface IServiceOptions<T = any> {
     concurrency: number;
-    workerOptions: Pick<IWorkerOptions<T>, 'tickTime'>;
+    workerOptions: IWorkerOptions<T>;
     logger: Logger;
 }
 
@@ -55,7 +55,6 @@ export interface IWorkerOptions<TInput = any> {
     _preProcessor: () => Promise<TInput>;
     exceptionHandler(err: Error): void;
     logger: Logger;
-    tickTime: number; //Milliseconds
 }
 
 export interface IWorker<TInput, TOutput = any> extends IInitializable, ICloseable {
@@ -150,7 +149,6 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
 export abstract class Worker<TInput> implements IWorker<TInput> {
     isRunning: boolean;
     isClosed: boolean;
-    tickTime: number; //Milliseconds
     logger: Logger;
     id: string;
     _preProcessor: () => Promise<TInput>;
@@ -162,7 +160,6 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
         this.isClosed = false;
         this.id = options.id;
         this.logger = options.logger;
-        this.tickTime = options.tickTime;
         this._preProcessor = options._preProcessor;
         this._exceptionHandler = options.exceptionHandler;
     }
@@ -198,7 +195,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
                 this._exceptionHandler(err);
             })
             //Don't care if it fails, rerun;
-            .finally(() => BPromise.delay(this.tickTime).then(() => this.run()));
+            .finally(() => this.run());
         }
     }
 
