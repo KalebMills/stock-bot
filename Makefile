@@ -1,5 +1,4 @@
-#TODO: Add targets for building SQLite db, and migrating the schema
-
+SERVICE_NAME ?= stock-bot
 
 .PHONY: tsc-only
 tsc-only: 
@@ -14,8 +13,19 @@ newest-tickers:
 	node bin/fetch-latest-tickers.js
 
 
-#Service Management Commands
 
+#Service Management Commands
 .PHONY: start-bot
 start-bot:
-	CONFIG_FILE=$(CONFIG_FILE) ALPACAS_SECRET_KEY=$(ALPACAS_SECRET_KEY) ALPACAS_API_KEY=$(ALPACAS_API_KEY) DISCORD_API_KEY=$(DISCORD_API_KEY) DISCORD_GUILD_ID=$(DISCORD_GUILD_ID) pm2 start bin/stock-bot.js --name stock-bot
+	CONFIG_FILE=$(CONFIG_FILE) ALPACAS_SECRET_KEY=$(ALPACAS_SECRET_KEY) \
+	ALPACAS_API_KEY=$(ALPACAS_API_KEY) DISCORD_API_KEY=$(DISCORD_API_KEY) \
+	DISCORD_GUILD_ID=$(DISCORD_GUILD_ID) \
+	pm2 start bin/stock-bot.js --name $(SERVICE_NAME)
+
+.PHONY: stop-bot
+stop-bot:
+	pm2 delete $(SERVICE_NAME)
+
+.PHONY: restart-bot
+restart-bot:
+	pm2 restart $(SERVICE_NAME)
