@@ -45,7 +45,7 @@ for (let ticker of data) {
 const datasourceOptions = {
     logger,
     validationSchema: StockTickerSchema,
-    subscribeTicker: t
+    tickers: t
 }
 
 const datastore = new MemoryDataStore({

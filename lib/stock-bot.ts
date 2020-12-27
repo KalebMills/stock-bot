@@ -174,7 +174,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
                         .then(() => this.preProcess());
                     } else {
                         this.logger.log(LogLevel.INFO, `this.processables.length = 0, return the backoff promise`);
-                        return BPromise.delay(5000).then(() => this.preProcess())
+                        return BPromise.delay(500).then(() => this.preProcess())
                     }
                 } else {
                     this.logger.log(LogLevel.INFO, `Nothing in this.processables, instead retrying this.preProcess()`);

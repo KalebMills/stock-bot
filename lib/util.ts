@@ -1,6 +1,7 @@
 import * as cp from 'child_process';
 import * as winston from 'winston';
 import { Logger } from './base';
+import * as fs from 'fs';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -13,7 +14,7 @@ export const createDeferredPromise = (): IDeferredPromise => {
     //@ts-ignore
     let deferredPromise!: IDeferredPromise = {};
     
-    let p = new Promise((resolve, reject) => {
+    let p = new Promise<void>((resolve, reject) => {
         deferredPromise.cancellable = () => {};
         deferredPromise.reject = () => {
             deferredPromise.cancellable();
@@ -65,5 +66,18 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
     return winston.createLogger({
         transports,
         ...options
+    })
+}
+
+export const fetchTickersFromFile = (thePath: string): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+        fs.readFile(thePath, (err, data) => {
+            if (err) {
+                reject(err);
+            } else {
+                let tickers = data.toString().split('\n').filter(ticker => !!ticker);
+                resolve(tickers);
+            }
+        })
     })
 }

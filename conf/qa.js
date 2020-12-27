@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { PolygonLiveDataSource } = require('../lib/data-source');
+const { PolygonLiveDataSource, MockEventEmitter } = require('../lib/data-source');
 const { RedisDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
@@ -37,12 +37,12 @@ const datasourceOptions = {
     logger,
     //TODO: This needs to be changed to be an abstract method of the DataSource class
     validationSchema: joi.object({}),
-    subscribeTicker: t
+    tickers: t
 }
 
 const DISCORD_CLIENT = new discord.Client({});
 
-const datasource = new PolygonLiveDataSource(datasourceOptions);
+const datasource = new PolygonLiveDataSource({ ...datasourceOptions, mockEmitter: new MockEventEmitter({ eventsPerSecond: 200 }) });
 
 const datastore = new RedisDataStore({
     host: 'localhost',
@@ -73,7 +73,7 @@ const notification = new DiscordNotification({
 
 
 const serviceOptions = {
-    concurrency: 1,
+    concurrency: 10,
     logger,
     datasource,
     datastore,
