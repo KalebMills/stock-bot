@@ -217,24 +217,19 @@ export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> im
     }
 }
 
+
+export interface MockEventEmitterOptions {
+    eventsPerSecond: number;
+    logger: Logger;
+}
+
 /**
  * A Mock Emitter for the PolygonLiveDataSource class, which will simulate running through events to the DataSource
 */
 
-export interface MockEventEmitterOptions {
-    eventsPerSecond: number;
-
-}
-
-//Needs to output MESSAGE, and for now only output Trade event
-
-/*
-    To begin, emit the SUBSCRIBED event (indicates to the PolygonLiveDataSource that the class should resolve it's initialize function)
-
-*/
 export class MockEventEmitter extends EventEmitter {
     eventsPerSecond: number;
-    workerThreads: {[key: string]: {
+    workerThreads: {[id: string]: {
         id: string,
         process: Promise<any>
         active: boolean
@@ -242,11 +237,12 @@ export class MockEventEmitter extends EventEmitter {
     tickers: {[ticker: string]: {
         price: number
     }};
+    logger: Logger;
 
     constructor(options: MockEventEmitterOptions) {
         super();
-        console.log(`${this.constructor.name}#constructor():INVOKED`)
         this.eventsPerSecond = options.eventsPerSecond;
+        this.logger = options.logger;
         this.workerThreads = {};
         this.tickers = {};
 
@@ -272,8 +268,12 @@ export class MockEventEmitter extends EventEmitter {
             console.error(err);
         });
 
-        //This constructor must call it's own start
+        console.log(`${this.constructor.name}#constructor():INVOKED`);
     }
+
+    /**
+     * Creates a Promise that acts as a thread, which will recursively run and emit an event
+     */
 
     startWorkerThread(): void {
         let workerId = chance().guid().substr(0, 5);
@@ -290,6 +290,11 @@ export class MockEventEmitter extends EventEmitter {
         
         return;
     }
+
+    /**
+     * Creates a process that recursively runs and emits an event
+     * @param id the id of the "process" that is tracked in this.workerThreads
+     */
 
     execute(id: string): Promise<any> {
         // console.log(`Calling execute(${id})`)
@@ -319,13 +324,17 @@ export class MockEventEmitter extends EventEmitter {
         }
     }
 
+    /**
+     * Returns a random ticker with a price that has changed a random percentage below 1%
+     */
+
     getRandomTickerData(): { ticker: string, price: number } {
         let index = chance().integer({ min: 0, max: (Object.keys(this.tickers).length - 1) });
         let ticker = Object.keys(this.tickers)[index];
         let tickerObj = this.tickers[ticker];
 
         //Only allow for .002% change per event
-        let price = chance().integer({ min: tickerObj.price - (tickerObj.price * Math.random()) , max: tickerObj.price + (tickerObj.price * Math.random()) });
+        let price = chance().integer({ min: tickerObj.price - (tickerObj.price * (Math.random() * .01)) , max: tickerObj.price + (tickerObj.price * (Math.random() * .01)) });
         //Update the object to the now price
         this.tickers[ticker].price = price;
 
@@ -335,7 +344,7 @@ export class MockEventEmitter extends EventEmitter {
         }
     }
 
-    stop(): Promise<any> {
+    close(): Promise<any> {
         //Set all processes to stop
         Object.values(this.workerThreads).forEach((worker, i) => {
             this.workerThreads[worker.id].active = false;

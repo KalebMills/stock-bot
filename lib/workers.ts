@@ -229,7 +229,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     return this.notification.notify({
                         ticker: currTrade.sym,
                         price: currTrade.p,
-                        message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
+                        message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(4)} per minute.`,
                         additionaData: {
                             'Exchange': this.exchange.constructor.name,
                             'DataSource': this.datasource.constructor.name,
