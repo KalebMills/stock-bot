@@ -30,3 +30,17 @@ stop-bot:
 .PHONY: restart-bot
 restart-bot:
 	pm2 restart $(SERVICE_NAME)
+
+
+# Service Dependency Commands
+
+.PHONY: start=redis
+start-redis:
+	docker run --name=stock_bot_redis -d -p 6379:6379 redis:alpine
+
+.PHONY: stop-redis
+stop-redis:
+	docker rm -f stock_bot_redis
+
+.PHONY: restart-redis
+restart-redis: stop-redis start-redis
