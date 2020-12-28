@@ -42,6 +42,9 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
         this.guildId = options.guildId;
         this.channelName = options.channelName;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
+
+        //System Commands
+        this.client.on('message', this._messageHandler);
     }
 
     initialize(): Promise<void> {
@@ -89,6 +92,50 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
         })
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#alert():SUCCESS`);
+        });
+    }
+
+    private _messageHandler = (msg: discord.Message): void => {
+        console.log(`Got Message, ${msg.content}`)
+        const COMMAND_PREFIX = '~';
+        const isCommand = !!msg.content.startsWith(COMMAND_PREFIX);
+        const command = msg.content.substring(1);
+
+        if (!isCommand) {
+            return;
+        }
+        
+        switch(command) {
+            case "clearChannel":
+                const channel: discord.TextChannel = msg.channel as discord.TextChannel;
+
+                this._deleteMessages(channel)
+                .catch(err => {
+                    console.error(err);
+                });
+
+                break;
+            
+            case "help":
+                msg.reply(`
+                Supported Commands:\n
+                **clearChannel** - _Clear all messages in the channel_
+                `)
+                break;
+
+            default:
+                msg.reply(`${command} is not a command, try ${COMMAND_PREFIX}help for details.`);
+                break;
+        }
+    }
+
+    private _deleteMessages = (channel: discord.TextChannel): Promise<any> => {
+        return channel.bulkDelete(99)
+        .then(() => {
+            let msgsCount = channel.messages.cache.size;
+            if (msgsCount > 0) {
+                return this._deleteMessages(channel);
+            }
         });
     }
 
