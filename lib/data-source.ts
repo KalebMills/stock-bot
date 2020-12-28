@@ -312,7 +312,7 @@ export class MockEventEmitter extends EventEmitter {
                     "p": data.price,           // Price
                     "s": 100,               // Trade Size
                     "c": [0, 12],           // Trade Conditions
-                    "t": Math.floor(new Date().getTime() / 1000)      // Trade Timestamp ( Unix MS )
+                    "t": Math.floor(new Date().getTime())      // Trade Timestamp ( Unix MS )
                 });
             })
             //Wait between .5 seconds and 1 second
@@ -333,8 +333,10 @@ export class MockEventEmitter extends EventEmitter {
         let ticker = Object.keys(this.tickers)[index];
         let tickerObj = this.tickers[ticker];
 
-        //Only allow for .002% change per event
+        //Only allow for .01% change per event
         let price = chance().integer({ min: tickerObj.price - (tickerObj.price * (Math.random() * .01)) , max: tickerObj.price + (tickerObj.price * (Math.random() * .01)) });
+        
+        console.log(`Current Fake Price ${tickerObj.price} -- This Event Price ${price}`)
         //Update the object to the now price
         this.tickers[ticker].price = price;
 

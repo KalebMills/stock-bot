@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { PolygonLiveDataSource, MockEventEmitter } = require('../lib/data-source');
+const { PolygonLiveDataSource } = require('../lib/data-source');
 const { RedisDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
@@ -42,7 +42,7 @@ const datasourceOptions = {
 
 const DISCORD_CLIENT = new discord.Client({});
 
-const datasource = new PolygonLiveDataSource({ ...datasourceOptions, mockEmitter: new MockEventEmitter({ eventsPerSecond: 200 }) });
+const datasource = new PolygonLiveDataSource(datasourceOptions);
 
 const datastore = new RedisDataStore({
     host: 'localhost',
@@ -73,7 +73,7 @@ const notification = new DiscordNotification({
 
 
 const serviceOptions = {
-    concurrency: 10,
+    concurrency: 3,
     logger,
     datasource,
     datastore,

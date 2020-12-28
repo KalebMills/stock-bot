@@ -120,7 +120,9 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
     */
 
     preProcess = async (): Promise<ITickerChange> => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`);
+
+        //TODO: Move this higher up to the service. This should not be a requirement for each time the workers process a ticker
         let marketIsOpen = (await this.exchange.isMarketTime());
 
         if (this.isClosed) {
