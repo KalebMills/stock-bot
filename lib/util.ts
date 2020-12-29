@@ -2,6 +2,7 @@ import * as cp from 'child_process';
 import * as winston from 'winston';
 import { Logger } from './base';
 import * as fs from 'fs';
+import Axios from 'axios';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -80,4 +81,17 @@ export const fetchTickersFromFile = (thePath: string): Promise<string[]> => {
             }
         })
     })
+}
+
+export const fetchTickerGraph = (ticker: string): Promise<string> => {
+    return Axios.get(`https://symbol-search.tradingview.com/symbol_search/?text=${ticker}&exchange=&type=&hl=true&lang=en&domain=production`)
+    .then(data => {
+        const output = data.data[0];
+        console.log(JSON.stringify(output))
+        if (output.hasOwnProperty('prefix')) {
+            return `https://www.tradingview.com/symbols/${output.prefix}-${ticker}/`;
+        } else {
+            return `https://www.tradingview.com/symbols/${output.exchange}-${ticker}/`;
+        }
+    });
 }

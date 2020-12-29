@@ -6,6 +6,7 @@ export interface NotificationOptions {
     ticker: string;
     message: string;
     additionaData?: { [key: string]: string | number }
+    url?: string;
     price?: number;
     volume?: number;
 }
@@ -69,6 +70,10 @@ export class DiscordNotification implements INotification {
                 .setDescription(`**${message.message}**`)
                 .setTimestamp()
                 .setFooter('StockBot', 'https://icon2.cleanpng.com/20180402/xww/kisspng-chart-graph-of-a-function-infographic-information-stock-market-5ac2c6f186ff53.663225121522714353553.jpg');
+
+                if (message.hasOwnProperty('url')) {
+                    embed.setURL(message['url']!);
+                }
 
                 if (message.price) {
                     embed.addField('Price', `$${message.price}`, true);

@@ -1,4 +1,5 @@
 import { Worker, IWorker, IWorkerOptions, LogLevel, Logger } from './base';
+import * as util from './util';
 import axios, { AxiosResponse } from 'axios';
 import { AlpacasExchange, Exchange } from './exchange';
 import * as Alpacas from '@master-chief/alpaca';
@@ -223,20 +224,41 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .009 && timeTaken >= 180) {
+                if (changePercentPerMinute > .015 && timeTaken >= 180) {
                     this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
                     
-                    return this.notification.notify({
+                    return util.fetchTickerGraph(currTrade.sym)
+                    .then((graphLink) => this.notification.notify({
                         ticker: currTrade.sym,
                         price: currTrade.p,
+                        url: graphLink,
                         message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(4)} per minute.`,
                         additionaData: {
                             'Exchange': this.exchange.constructor.name,
                             'DataSource': this.datasource.constructor.name,
-                            'Measure Time': `${((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60} Minutes`,
+                            'Measure Time': `${(((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60).toFixed(3)} Minutes`,
                             'Previous Price': `${prevTrade.p}`,
                             'Action Recommendation': 'Purchase',
                         }
+                    }))
+                    .then(() => {
+                        // return this.exchange.placeOrder({
+                        //     qty: 1,
+                        //     order_class: 'bracket',
+                        //     time_in_force: 'day',
+                        //     symbol: currTrade.sym,
+                        //     side: 'buy',
+                        //     type: 'market',
+                        //     take_profit: {
+                        //         limit_price: currTrade.p + (currTrade.p * .03), //Take 3% profit
+                        //     },
+                        //     stop_loss: {
+                        //         stop_price: currTrade.p - (currTrade.p * .015), //Only allow 1.5% loss
+                        //     }
+                        // });
+                    })
+                    .then(() => {
+                        this.logger.log(LogLevel.INFO, `Place PAPER order for ${currTrade.sym}`);
                     })
                     .then(() => {
                         this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
