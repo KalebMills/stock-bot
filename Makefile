@@ -21,7 +21,7 @@ start-bot:
 	ALPACAS_API_KEY=$(ALPACAS_API_KEY) DISCORD_API_KEY=$(DISCORD_API_KEY) \
 	DISCORD_GUILD_ID=$(DISCORD_GUILD_ID) \
 	UV_THREADPOOL_SIZE=128 \
-	pm2 start bin/stock-bot.js --name $(SERVICE_NAME)
+	pm2 start bin/stock-bot.js --name $(SERVICE_NAME) --max-memory-restart 1024M
 
 .PHONY: stop-bot
 stop-bot:
