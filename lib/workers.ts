@@ -224,7 +224,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .015 && timeTaken >= 180) {
+                if (changePercentPerMinute > .025 && timeTaken >= 180) {
                     this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
                     
                     return util.fetchTickerGraph(currTrade.sym)
