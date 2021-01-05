@@ -106,7 +106,7 @@ describe('#LiveDataStockWorker', () => {
     it('Can intiialize', () => {
         return worker.initialize();
     });
-    it('Can process a QuoteEvent', () => {
+    it('Can process a Trade Event', () => {
         //@ts-ignore
         worker.exchange.placeOrder = () => Promise.resolve();
         //increase value that would trigger the notification;
@@ -118,11 +118,12 @@ describe('#LiveDataStockWorker', () => {
         return worker.process(TRADE_EVENT)
             .then(() => {
             const NEW_TRADE_EVENT = Object.assign({}, TRADE_EVENT);
-            NEW_TRADE_EVENT.p = 1000;
-            NEW_TRADE_EVENT.t = TRADE_EVENT.t + 1800;
+            NEW_TRADE_EVENT.p = 100000000;
+            NEW_TRADE_EVENT.t = TRADE_EVENT.t + (200 * 1000);
             return worker.process(NEW_TRADE_EVENT)
                 .then(() => datastore.get('PURCHASE_MSFT'))
                 .then((data) => {
+                console.log(`GOT DATA FROM PROCESS = ${JSON.stringify(data)}`);
                 if (!(data.length > 0)) {
                     chai.assert.fail('There was no purchase flag for MSFT');
                 }

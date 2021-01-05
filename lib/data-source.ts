@@ -15,6 +15,7 @@ import { TradeEvent } from './workers';
 import chance from 'chance';
 import * as path from 'path';
 import BPromise from 'bluebird';
+import { IDeferredPromise, createDeferredPromise } from './util';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -221,10 +222,13 @@ export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> im
 export interface MockEventEmitterOptions {
     eventsPerSecond: number;
     logger: Logger;
+    ticker: string;
+    date: Date;
 }
 
 /**
- * A Mock Emitter for the PolygonLiveDataSource class, which will simulate running through events to the DataSource
+ * A Mock Emitter for the PolygonLiveDataSource class, which will simulate running through events to the DataSource\
+ * For now, this class takes in a ticker and date to fetch true historic data for.
 */
 
 export class MockEventEmitter extends EventEmitter {
@@ -234,28 +238,21 @@ export class MockEventEmitter extends EventEmitter {
         process: Promise<any>
         active: boolean
     }}
-    tickers: {[ticker: string]: {
-        price: number
-    }};
+    events: TradeEvent[];
     logger: Logger;
+    ticker: string;
 
     constructor(options: MockEventEmitterOptions) {
         super();
         this.eventsPerSecond = options.eventsPerSecond;
         this.logger = options.logger;
         this.workerThreads = {};
-        this.tickers = {};
+        this.events = [];
+        this.ticker = options.ticker;
 
-        U.fetchTickersFromFile(path.join(__dirname, '..', 'resources', 'tickers.txt'))
-        .then((tickers: string[]) => {
-            tickers.forEach(ticker => {
-                this.tickers[ticker] = {
-                    price: chance().integer({ min: 15, max: 3500 }) //Values are relatively arbitrary
-                }
-            });
-
-            //Spawn event processing;
-
+        U.fetchHistoricTradeEvents(options.ticker, options.date)
+        .then(events => {
+            this.events = events;
             for (let i = 0; i <= this.eventsPerSecond; i++) {
                 this.startWorkerThread();
             }
@@ -263,10 +260,8 @@ export class MockEventEmitter extends EventEmitter {
             //Will cause the PolygonLiveDataSource to be initialized, and begin processing
             this.emit('SUBSCRIBED');
         })
-        .catch(err => {
-            console.log(`FAILED TO READ TICKER FILE IN ${this.constructor.name}#constructor()`)
-            console.error(err);
-        });
+        .catch(err => Promise.reject(err));
+
 
         console.log(`${this.constructor.name}#constructor():INVOKED`);
     }
@@ -287,6 +282,7 @@ export class MockEventEmitter extends EventEmitter {
         };
 
         this.workerThreads[workerId].process = this.execute(workerId);
+
         
         return;
     }
@@ -297,27 +293,22 @@ export class MockEventEmitter extends EventEmitter {
      */
 
     execute(id: string): Promise<any> {
-        // console.log(`Calling execute(${id})`)
         if (this.workerThreads[id].active) {
-            const data = this.getRandomTickerData();
-            return Promise.resolve()
-            .then(() => {
-                //NOTE: Right now, we only support the Trade event for this test
-                this.emit('TRADE', {
-                    "ev": "T",              // Event Type
-                    "sym": data.ticker,          // Symbol Ticker
-                    "x": 4,                 // Exchange ID
-                    "i": "12345",           // Trade ID
-                    "z": 3,                 // Tape ( 1=A 2=B 3=C)
-                    "p": data.price,           // Price
-                    "s": 100,               // Trade Size
-                    "c": [0, 12],           // Trade Conditions
-                    "t": Math.floor(new Date().getTime())      // Trade Timestamp ( Unix MS )
-                });
-            })
-            //Wait between .5 seconds and 1 second
-            .then(() => BPromise.delay(chance().integer({ min: 500, max: 1000 })))
-            .then(() => this.execute(id));
+            const data = this.events.shift()!;
+
+            if (data) {
+                data.sym = this.ticker;
+                return Promise.resolve()
+                .then(() => {
+                    //NOTE: Right now, we only support the Trade event for this test
+                    this.emit('TRADE', data);
+                })
+                //Wait between .5 seconds and 1 second
+                .then(() => BPromise.delay(chance().integer({ min: 500, max: 1000 })))
+                .then(() => this.execute(id));
+            } else {
+                return Promise.resolve();
+            }
         } else {
             //End recursive loop
             return Promise.resolve();
@@ -328,23 +319,23 @@ export class MockEventEmitter extends EventEmitter {
      * Returns a random ticker with a price that has changed a random percentage below 1%
      */
 
-    getRandomTickerData(): { ticker: string, price: number } {
-        let index = chance().integer({ min: 0, max: (Object.keys(this.tickers).length - 1) });
-        let ticker = Object.keys(this.tickers)[index];
-        let tickerObj = this.tickers[ticker];
+    // getRandomTickerData(): { ticker: string, price: number } {
+    //     let index = chance().integer({ min: 0, max: (Object.keys(this.tickers).length - 1) });
+    //     let ticker = Object.keys(this.tickers)[index];
+    //     let tickerObj = this.tickers[ticker];
 
-        //Only allow for .01% change per event
-        let price = chance().integer({ min: tickerObj.price - (tickerObj.price * (Math.random() * .01)) , max: tickerObj.price + (tickerObj.price * (Math.random() * .01)) });
+    //     //Only allow for .01% change per event
+    //     let price = chance().integer({ min: tickerObj.price - (tickerObj.price * (Math.random() * .01)) , max: tickerObj.price + (tickerObj.price * (Math.random() * .01)) });
         
-        console.log(`Current Fake Price ${tickerObj.price} -- This Event Price ${price}`)
-        //Update the object to the now price
-        this.tickers[ticker].price = price;
+    //     console.log(`Current Fake Price ${tickerObj.price} -- This Event Price ${price}`)
+    //     //Update the object to the now price
+    //     this.tickers[ticker].price = price;
 
-        return {
-            ticker,
-            price
-        }
-    }
+    //     return {
+    //         ticker,
+    //         price
+    //     }
+    // }
 
     close(): Promise<any> {
         //Set all processes to stop
@@ -352,6 +343,8 @@ export class MockEventEmitter extends EventEmitter {
             this.workerThreads[worker.id].active = false;
         });
         this.emit('UNSUBSCRIBED'); //Causes the PolygonLiveDataSource to close it's workers
+
+        this.removeAllListeners();
 
         //Return the thread Promises
         return Promise.all( Object.values(this.workerThreads).map(thread => thread.process) );

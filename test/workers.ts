@@ -1,12 +1,11 @@
 import { LiveDataStockWorker, QuoteEvent, TradeEvent } from '../lib/workers';
 import { AlpacasExchange } from '../lib/exchange';
 import { NotificationOptions, PhonyNotification } from '../lib/notification';
-import { DataSource, PhonyDataSource } from '../lib/data-source';
+import { PhonyDataSource } from '../lib/data-source';
 import { PhonyDataStore } from '../lib/data-store';
 import * as util from '../lib/util';
 import * as joi from 'joi';
 import * as chai from 'chai';
-import { Trade } from '@master-chief/alpaca/types/entities';
 
 let logger = util.createLogger({});
 
@@ -98,7 +97,7 @@ describe('#LiveDataStockWorker', () => {
         return worker.initialize();
     });
 
-    it('Can process a QuoteEvent', () => {
+    it('Can process a Trade Event', () => {
         //@ts-ignore
         worker.exchange.placeOrder = () => Promise.resolve();
 
@@ -112,12 +111,13 @@ describe('#LiveDataStockWorker', () => {
         return worker.process(TRADE_EVENT)
         .then(() => {
             const NEW_TRADE_EVENT: TradeEvent = { ...TRADE_EVENT };
-            NEW_TRADE_EVENT.p = 1000;
-            NEW_TRADE_EVENT.t = TRADE_EVENT.t + 1800;
+            NEW_TRADE_EVENT.p = 100000000;
+            NEW_TRADE_EVENT.t = TRADE_EVENT.t + (200 * 1000);
 
             return worker.process(NEW_TRADE_EVENT)
             .then(() => datastore.get('PURCHASE_MSFT'))
             .then((data) => {
+                console.log(`GOT DATA FROM PROCESS = ${JSON.stringify(data)}`)
                 if (!(data.length > 0)) {
                     chai.assert.fail('There was no purchase flag for MSFT');
                 }

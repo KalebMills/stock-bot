@@ -140,8 +140,6 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             // this.logger.log(LogLevel.TRACE, `Taking ${JSON.stringify(ticker)} out of this.processables, pushing ticker to this.process(${JSON.stringify(ticker)})`);
             //Now update what is processable
             const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
-            //@ts-ignore
-            this.datasource.timeoutTicker(ticker.sym, 180)
             //TODO: This should *ONLY* be done everytime that we fetchWork().. we duplicate and expontentially increase the amount of work to be done by doing this here.
             //@ts-ignore
             this.processables = this.processables.filter((tkr: ITickerChange) => !keys.includes(tkr.sym));

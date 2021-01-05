@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { YahooGainersDataSource, PolygonGainersLosersDataSource, PolygonLiveDataSource } = require('../lib/data-source');
+const { MockEventEmitter, PolygonLiveDataSource } = require('../lib/data-source');
 const { MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const fs = require('fs');
@@ -33,26 +33,32 @@ const StockTickerSchema = joi.object({
     })
 }).required();
 
-const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.txt')).toString().split('\n');
-
-// let t = ['APPL', 'TSLA', 'AMZN', 'ABNB', 'DASH'];
-let t = []
-
-for (let ticker of data) {
-    t.push(ticker);
-}
-
-const datasourceOptions = {
-    logger,
-    validationSchema: StockTickerSchema,
-    tickers: t
-}
-
 const datastore = new MemoryDataStore({
     logger
 });
 
-const datasource = new PolygonLiveDataSource(datasourceOptions);
+const date = new Date();
+
+date.setDate(30)
+date.setFullYear(2020)
+date.setMonth(11)
+
+
+console.log(date.toString())
+
+const emitter = new MockEventEmitter({
+    logger,
+    ticker: 'IPDN',
+    date,
+    eventsPerSecond: 20
+})
+
+const datasource = new PolygonLiveDataSource({
+    logger,
+    tickers: [],
+    validationSchema: joi.object({}),
+    mockEmitter: emitter
+})
 
 const exchange = new PhonyExchange({
     logger
@@ -65,7 +71,7 @@ const notification = new PhonyNotification({
 const diagnostic = new PhonyDiagnostic();
 
 const serviceOptions = {
-    concurrency: 1,
+    concurrency: 10,
     logger,
     datasource,
     datastore,

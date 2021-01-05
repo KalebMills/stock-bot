@@ -6,7 +6,7 @@ const winston = require('winston');
 const discord = require('discord.js');
 const { PhonyExchange, AlpacasExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
-const { DiscordNotification } = require('../lib/notification');
+const { DiscordNotification, FileWriterNotification } = require('../lib/notification');
 const { LiveDataStockWorker } = require('../lib/workers');
 const fs = require('fs');
 
@@ -83,6 +83,12 @@ const notification = new DiscordNotification({
     client: DISCORD_CLIENT
 });
 
+
+// TODO: Make a simulation.js config for running historical trade data
+// const notification = new FileWriterNotification({
+//     logger,
+//     filePath: path.join(__dirname, '..', 'logs', 'notifications.txt')
+// });
 
 const serviceOptions = {
     concurrency: 10,
