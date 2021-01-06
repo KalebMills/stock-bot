@@ -9,7 +9,7 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { convertDate, minutesSinceOpen, returnLastOpenDay } from './util';
+import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, minutesSinceOpen, returnLastOpenDay } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot } from '../types';
 
@@ -212,7 +212,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
         return this.datastore.get(currTrade.sym) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
-        .then(async (data: TradeEvent[]) => {
+        .then((data: TradeEvent[]) => {
             if (!(data.length === 1)) {
                 this.logger.log(LogLevel.INFO, `No data in datastore for ${currTrade.sym}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
@@ -226,31 +226,42 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
                 //If the change percent is greater than .5% per minute, notify
                 if (changePercentPerMinute > .009 && timeTaken >= 180) {
-                    //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
-                    const relativeVolume = await this._getRelativeVolume(currTrade.sym)
-                    if(relativeVolume > 2) {
-                        this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
-                    
-                        return this.notification.notify({
-                            ticker: currTrade.sym,
-                            price: currTrade.p,
-                            message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
-                            additionaData: {
-                                'Exchange': this.exchange.constructor.name,
-                                'DataSource': this.datasource.constructor.name,
-                                'Measure Time': `${((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60} Minutes`,
-                                'Previous Price': `${prevTrade.p}`,
-                                'Action Recommendation': 'Purchase',
-                                'Relative Volume': relativeVolume
-                            }
-                        })
-                        .then(() => {
-                            this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
-                        });
+
+                    const confidenceOptions: ConfidenceScoreOptions = {
+                        'relativeVolume': {
+                            value: 5,
+                            process: this._getRelativeVolume(currTrade.sym).then(data => !!(data > 2))
+                        },
+                        'vwap': {
+                            value: 5,
+                            process: getTickerSnapshot(currTrade.sym).then(data => (data.day.vw > currTrade.p))
+                        }
                     }
-                } else {
-                    this.logger.log(LogLevel.TRACE, `${currTrade.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currTrade, prevTrade)}`)
-                    return;
+
+                    //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
+                    return getConfidenceScore(confidenceOptions)
+                    .then((confidenceScore: number) => {
+                        if (confidenceScore >= 90) {
+                            this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
+                        
+                            return this.notification.notify({
+                                ticker: currTrade.sym,
+                                price: currTrade.p,
+                                message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
+                                additionaData: {
+                                    'Exchange': this.exchange.constructor.name,
+                                    'DataSource': this.datasource.constructor.name,
+                                    'Measure Time': `${(((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60).toFixed(2)} Minutes`,
+                                    'Previous Price': `${prevTrade.p}`,
+                                    'Action Recommendation': 'Purchase',
+                                    'Confidence Score': confidenceScore
+                                }
+                            })
+                            .then(() => {
+                                this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
+                            });
+                        }
+                    });
                 }
             }
         })

@@ -115,13 +115,14 @@ export const convertDate = (date: Date): string => {
     var mmChars: string[] = mm.split('');
     var ddChars: string[] = dd.split('');
   
-    return yyyy + '-' + (mmChars[1]?mm:"0"+mmChars[0]) + '-' + (ddChars[1]?dd:"0"+ddChars[0]);
+    return yyyy + '-' + (mmChars[1] ? mm : `0${mmChars[0]}`) + '-' + (ddChars[1] ? dd : `0${ddChars[0]}`);
   }
 
 export const minutesSinceOpen = (): number => {
     const now: Date = new Date()
     const marketOpen: Date = new Date()
     //TODO - definitely needs to be changed, set this to market open at UTC, will need to account for daylight savings
+    // Can probobly use moment for this
     marketOpen.setHours(14)
     marketOpen.setMinutes(30)
     const minutesPassed: number = Math.round((now.getTime() - marketOpen.getTime())/60000)
@@ -136,4 +137,48 @@ export const getTickerSnapshot = (ticker: string): Promise<Snapshot> => {
     })
     .then((data: AxiosResponse<Snapshot>) => data.data)
     .catch(err => Promise.reject(new RequestError(JSON.stringify(err))));
+}
+
+
+export interface ConfidenceScoreOptions {
+    [indicatorName: string]: {
+        value: number
+        process: Promise<boolean>
+    };
+}
+
+/**
+ * A function that takes in a group of indicators, and based on their value, provides a confidence score based on their signal output
+ * @param options An object describing the value of each indicator, and the Promise that will return it's signal
+ * @returns A number, which will be between 0-100, which indicates the confidence of the indicators
+ */
+
+export const getConfidenceScore = (options: ConfidenceScoreOptions): Promise<number> => {
+    console.log(`getConfidenceScore():INVOKED`);
+    let summedValues: number = 0;
+    let summedFalseSignalValues: number = 0;
+    let processes: Promise<[boolean, number]>[] = [];
+
+    Object.keys(options).forEach((key: string) => {
+        let indicator = options[key];
+        summedValues = summedValues + indicator.value;
+        //Allows us to map the given value of an indicator, to it's process once it has resolved.
+        processes.push(indicator.process.then((val: boolean) => [val, indicator.value]));
+
+    });
+
+    return Promise.all(processes)
+    .then((values: [boolean, number][]) => {
+        values.forEach(([signal, value]: [boolean, number]) => {
+            //If the signal is false, add it's value to the values that are false signals
+            if (!signal) {
+                summedFalseSignalValues = summedFalseSignalValues + value;
+            }
+        });
+    })
+    .then(() => {
+        //Rounded to 2 decimals
+        let calculation = 100 - ((summedFalseSignalValues / summedValues) * 100);
+        return Number(calculation.toFixed(2));
+    });
 }
