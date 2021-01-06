@@ -9,7 +9,7 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { _convertDate, _minutesSinceOpen, _returnLastOpenDay } from './util';
+import { convertDate, minutesSinceOpen, returnLastOpenDay } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot } from '../types';
 
@@ -292,11 +292,11 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         const yesterday: Date = new Date()
 
         yesterday.setDate(yesterday.getDate() - 1)
-        lastDay.setDate(await _returnLastOpenDay(yesterday))
+        lastDay.setDate(await returnLastOpenDay(yesterday))
         
-        const lastDate: string = _convertDate(lastDay)
+        const lastDate: string = convertDate(lastDay)
 
-        const minutesPassed: number = _minutesSinceOpen()
+        const minutesPassed: number = minutesSinceOpen()
 
         return Promise.all([
             axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
