@@ -1,9 +1,14 @@
-export interface PolygonSnapshot {
+export interface PolygonGainersLosersSnapshot {
     status: string;
-    tickers: SnapshotArray[];
+    tickers: Snapshot[];
 }
 
-export interface SnapshotArray {
+export interface PolygonTickerSnapshot {
+    status: string;
+    ticker: Snapshot;
+}
+
+export interface Snapshot {
     day: PolygonSnapshotDay
     lastQuote: PolygonSnapshotLastQuote
     lastTrade: PolygonSnapshotLastTrade

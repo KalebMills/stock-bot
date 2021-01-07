@@ -1,27 +1,6 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const base_1 = require("../lib/base");
-const util_1 = require("../lib/util");
-const winston = __importStar(require("winston"));
 class TestService extends base_1.Service {
     constructor(options) {
         super(options);
@@ -45,22 +24,15 @@ class TestWorker extends base_1.Worker {
     }
 }
 //Properties the tests need to run
-const logger = util_1.createLogger({ transports: [new winston.transports.Console()] });
-let service = new TestService({
-    concurrency: 10,
-    logger,
-    workerOptions: {
-        logger,
-        id: 'TEST',
-        //@ts-ignore
-        _preProcessor: () => Promise.resolve(),
-        exceptionHandler: () => { }
-    }
-});
+// const logger: Logger = createLogger({ transports: [ new winston.transports.Console() ] });
+// const WORKER_COUNT: number = 10;
+// //TODO: This typing is very strange. Fix
+// let service: Service<IWorker<string>>;
+// let worker: Worker<string>;
 // describe('#Base Service', () => {
 //     it('Can constuct a Service instance', () => {
 //         service = new TestService({
-//             concurrency: 10,
+//             concurrency: WORKER_COUNT,
 //             logger,
 //             workerOptions: {
 //                 logger,
@@ -70,10 +42,9 @@ let service = new TestService({
 //                 exceptionHandler: () => {}
 //             }
 //         });
-//         assert.deepStrictEqual(service instanceof Service, true);
+//         assert.equal(service instanceof Service, true);
 //     });
 //     it('Can create multiple workers', () => {
-//         // service['concurrency'] = 10;
 //         return service.initialize()
 //         .then(() => {
 //             assert.equal(service.workers.size === 10, true);

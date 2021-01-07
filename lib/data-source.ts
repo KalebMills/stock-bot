@@ -7,7 +7,7 @@ import { Logger, LogLevel, ICloseable, IInitializable } from './base';
 import color from 'chalk';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { PolygonSnapshot } from '../types/polygonSnapshot'
+import { PolygonGainersLosersSnapshot } from '../types/polygonSnapshot'
 import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
@@ -176,7 +176,7 @@ export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> im
 
     scrapeDatasource(): Promise<ITickerChange[]> {
         return Promise.all([axios.get(this.constructPolygonUrl('/gainers', this.scrapeUrl)), axios.get(this.constructPolygonUrl('/losers', this.scrapeUrl))])
-        .then(((data: AxiosResponse<PolygonSnapshot>[]) => {
+        .then(((data: AxiosResponse<PolygonGainersLosersSnapshot>[]) => {
             const tickers: ITickerChange[] = [];
             try {
                 data.forEach(response => {

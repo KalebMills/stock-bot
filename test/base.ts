@@ -33,25 +33,17 @@ class TestWorker extends Worker<string> {
 }
 
 //Properties the tests need to run
-const logger: Logger = createLogger({ transports: [ new winston.transports.Console() ] });
+// const logger: Logger = createLogger({ transports: [ new winston.transports.Console() ] });
+// const WORKER_COUNT: number = 10;
 
-let service: Service<string, string> = new TestService({
-    concurrency: 10,
-    logger,
-    workerOptions: {
-        logger,
-        id: 'TEST',
-        //@ts-ignore
-        _preProcessor: () => Promise.resolve(),
-        exceptionHandler: () => {}
-    }
-});
-
+// //TODO: This typing is very strange. Fix
+// let service: Service<IWorker<string>>;
+// let worker: Worker<string>;
 
 // describe('#Base Service', () => {
 //     it('Can constuct a Service instance', () => {
 //         service = new TestService({
-//             concurrency: 10,
+//             concurrency: WORKER_COUNT,
 //             logger,
 //             workerOptions: {
 //                 logger,
@@ -62,11 +54,10 @@ let service: Service<string, string> = new TestService({
 //             }
 //         });
 
-//         assert.deepStrictEqual(service instanceof Service, true);
+//         assert.equal(service instanceof Service, true);
 //     });
 
 //     it('Can create multiple workers', () => {
-//         // service['concurrency'] = 10;
 //         return service.initialize()
 //         .then(() => {
 //             assert.equal(service.workers.size === 10, true);
