@@ -39,6 +39,7 @@ let datastore = new PhonyDataStore({ logger });
 //     }
 
 const TRADE_EVENT: TradeEvent = {
+    "ticker": 'MSFT',
     "ev": "T",              // Event Type
     "sym": "MSFT",          // Symbol Ticker
     "x": 4,                 // Exchange ID

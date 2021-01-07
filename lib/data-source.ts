@@ -327,8 +327,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
                 break;
             case "T":
                 // console.log(JSON.stringify(data))
-                //TODO: NOTE removing this emitter seemed to fix the blocking problem we had last time, and instead just calling the quote handler directly
-                this.emitter.emit('TRADE', data);
+                this._tradeHandler(data);
                 break;
 
             default:
@@ -338,6 +337,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
 
     _tradeHandler = (data: TradeEvent) => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#data.length = ${this.data.length}`);
+        data['ticker'] = data.sym;
         // this.logger.log(LogLevel.TRACE, `QUOTE: ${JSON.stringify(data)}`)
         if (!(this.timedOutTickers.has(data.sym))) {
             this.data.push(data);
