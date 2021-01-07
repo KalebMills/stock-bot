@@ -254,6 +254,17 @@ export interface ConfidenceScoreOptions {
     };
 }
 
+/*
+    TODO: getConfidenceScore should also return what the indicator signals were, so we can also show such information
+    in notifications, and logging when we enable auto buys
+
+
+    {
+        "relativeVolume": true,
+        "vwap": false
+    }
+*/
+
 /**
  * A function that takes in a group of indicators, and based on their value, provides a confidence score based on their signal output
  * @param options An object describing the value of each indicator, and the Promise that will return it's signal

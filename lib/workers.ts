@@ -229,8 +229,9 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
                 //If the change percent is greater than .5% per minute, notify
                 //TODO: Make these values configuration via workerOptions
-                if (changePercentPerMinute > .04 && timeTaken >= 180) {
+                if (changePercentPerMinute > .035 && timeTaken >= 180) {
 
+                    //TODO: We now need a way to MOCK these, in the case where this is used in a test harness, and that current day's values are not what is expected in the Back Test
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
                             value: 5,
@@ -245,7 +246,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
-                        if (confidenceScore >= 49) {
+                        if (confidenceScore == 100) {
                             this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
