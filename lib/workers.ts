@@ -228,7 +228,8 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .08 && timeTaken >= 60) {
+                //TODO: Make these values configuration via workerOptions
+                if (changePercentPerMinute > .04 && timeTaken >= 180) {
 
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
