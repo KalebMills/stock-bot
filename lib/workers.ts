@@ -329,7 +329,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
             const today: PolygonTickerSnapshot = data[1].data
             return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.ticker.day.v)
         }).catch(err => {
-            throw new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`);
+            return Promise.reject(new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
         })
     }
 
