@@ -5,7 +5,7 @@ import { Logger } from './base';
 import { RequestError } from './exceptions';
 import { PolygonMarketHolidays } from '../types/polygonMarketHolidays';
 import Axios from 'axios';
-import { PolygonTickerSnapshot, Snapshot } from '../types';
+import { Snapshot } from '../types';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -103,7 +103,7 @@ export const getMarketHolidays = (): Promise<AxiosResponse> => {
     })
     .then((data: AxiosResponse)=> data)
     .catch(err => {
-        throw new RequestError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`)
+        return Promise.reject(new RequestError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`));
     })
 }
 
@@ -135,8 +135,11 @@ export const getTickerSnapshot = (ticker: string): Promise<Snapshot> => {
             apiKey: process.env['ALPACAS_API_KEY'] || ""
         }
     })
-    .then((data: AxiosResponse<Snapshot>) => data.data)
-    .catch(err => Promise.reject(new RequestError(JSON.stringify(err))));
+    .then((data: AxiosResponse<{status: string, ticker: Snapshot}>) => {
+        // console.log(`getTickerSnapshot():OUTPUT -- ${JSON.stringify(data.data.ticker)}`);
+        return data.data.ticker;
+    })
+    .catch((err: Error) => Promise.reject(new RequestError(err.message)));
 }
 
 

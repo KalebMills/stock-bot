@@ -241,25 +241,27 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
-                        if (confidenceScore >= 90) {
-                            this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
+                        if (confidenceScore >= 49) {
+                            this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
                                 ticker: currTrade.sym,
                                 price: currTrade.p,
-                                message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
+                                message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
                                 additionaData: {
                                     'Exchange': this.exchange.constructor.name,
                                     'DataSource': this.datasource.constructor.name,
                                     'Measure Time': `${(((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60).toFixed(2)} Minutes`,
                                     'Previous Price': `${prevTrade.p}`,
                                     'Action Recommendation': 'Purchase',
-                                    'Confidence Score': confidenceScore
+                                    'Confidence Score': `${confidenceScore}%`
                                 }
                             })
                             .then(() => {
                                 this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
                             });
+                        } else {
+                            this.logger.log(LogLevel.INFO, `Confidence score too low`);
                         }
                     });
                 }

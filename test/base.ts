@@ -79,35 +79,35 @@ const WORKER_COUNT: number = 10;
 let service: IService<IWorker<string>>;
 let worker: Worker<string>;
 
-describe('#Base Service', () => {
-    it('Can constuct a Service instance', () => {
-        service = new TestService({
-            concurrency: WORKER_COUNT,
-            logger,
-            workerOptions: {
-                logger,
-                id: 'TEST',
-                //@ts-ignore
-                _preProcessor: () => Promise.resolve(),
-                exceptionHandler: () => {}
-            }
-        });
+// describe('#Base Service', () => {
+//     it('Can constuct a Service instance', () => {
+//         service = new TestService({
+//             concurrency: WORKER_COUNT,
+//             logger,
+//             workerOptions: {
+//                 logger,
+//                 id: 'TEST',
+//                 //@ts-ignore
+//                 _preProcessor: () => Promise.resolve(),
+//                 exceptionHandler: () => {}
+//             }
+//         });
 
-        assert.equal(service instanceof Service, true);
-    });
+//         assert.equal(service instanceof Service, true);
+//     });
 
-    it('Can create multiple workers', () => {
-        return service.initialize()
-        .then(() => {
-            assert.equal(service.workers.size === 10, true);
-        });
-    });
+//     it('Can create multiple workers', () => {
+//         return service.initialize()
+//         .then(() => {
+//             assert.equal(service.workers.size === 10, true);
+//         });
+//     });
 
-   //In the future, we would want the Service process to stay running, in the case where workers are dynamic, and are created more as threads vs static running processes
-    it('Can close all workers, and close the process', () => {
-        return service.close()
-        .then(() => {
-            assert.equal(service.workers.size === 0, true);
-        });
-    });
-});
+//    //In the future, we would want the Service process to stay running, in the case where workers are dynamic, and are created more as threads vs static running processes
+//     it('Can close all workers, and close the process', () => {
+//         return service.close()
+//         .then(() => {
+//             assert.equal(service.workers.size === 0, true);
+//         });
+//     });
+// });
