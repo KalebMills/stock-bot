@@ -7,7 +7,7 @@ import moment from 'moment';
 import momentTimezone from 'moment-timezone';
 import * as exception from './exceptions';
 import { INotification } from './notification';
-import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
+import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
 import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, minutesSinceOpen, returnLastOpenDay } from './util';
@@ -25,7 +25,7 @@ export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOpt
 
 //Required interface to allow generic construction of the StockWorker(s)
 export interface IStockWorker<TInput, TOuput = any> extends IWorker<TInput, TOuput> {
-    new (options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>): IStockWorker<TInput, TOuput>;
+    new (options: IStockeWorkerOptions<BaseStockEvent, Alpacas.PlaceOrder, Alpacas.Order>): IStockWorker<TInput, TOuput>;
 };
 
 /*
@@ -153,7 +153,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
 //     "t": 1536036818784      // Quote Timestamp ( Unix MS )
 // }
 
-export interface QuoteEvent {
+export interface QuoteEvent extends BaseStockEvent {
     ev: string;
     sym: string;
     bx: number;
@@ -178,7 +178,7 @@ export interface QuoteEvent {
 //     "t": 1536036818784      // Trade Timestamp ( Unix MS )
 // }
 
-export interface TradeEvent {
+export interface TradeEvent extends BaseStockEvent {
     ev: string;
     sym: string;
     x: number;

@@ -1,11 +1,8 @@
-import { Service, Worker, IServiceOptions, IWorker, IWorkerOptions, LogLevel, Logger, promiseRetry } from './base';
+import { Service, IServiceOptions, IWorker, IWorkerOptions, LogLevel, promiseRetry } from './base';
 import BPromise from 'bluebird';
-import axios, { AxiosResponse } from 'axios';
-import { Exchange, PhonyExchange } from './exchange';
-import * as Alpacas from '@master-chief/alpaca';
+import { PhonyExchange } from './exchange';
 import { AlpacasExchange } from './exchange';
 import moment from 'moment';
-import momentTimezone from 'moment-timezone';
 import * as exception from './exceptions';
 import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
@@ -35,9 +32,13 @@ export const StockBotOptionsValidationSchema = joi.object({
     //Worker Options
     concurrency: joi.number().required(),
     logger: joi.object().required() //Winston is not actually a class
-})
+});
 
-export interface ITickerChange {
+export interface BaseStockEvent {
+    ticker: string; //Ticker name
+}
+
+export interface ITickerChange extends BaseStockEvent {
     ticker: string;
     price: number;
     percentChange: IStockChange;
@@ -52,7 +53,7 @@ export interface IStockServiceOptions extends IServiceOptions {
     exchange: AlpacasExchange;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
-    mainWorker: W.IStockWorker<ITickerChange>; //This is how we pass different algorithms to the service
+    mainWorker: W.IStockWorker<BaseStockEvent>; //This is how we pass different algorithms to the service
 }
 
 export interface IPurchaseOptions {
@@ -71,10 +72,10 @@ export interface IStockChange {
     persuasion: "up" | "down"
 }
 
-export class StockService extends Service<ITickerChange, ITickerChange> {
-    private processables: ITickerChange[];
+export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
+    private processables: BaseStockEvent[];
     private purchaseOptions: IPurchaseOptions;
-    private mainWorker: W.IStockWorker<ITickerChange>;
+    private mainWorker: W.IStockWorker<BaseStockEvent>;
     exchange: AlpacasExchange;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
     diagnostic: IDiagnostic;
@@ -103,7 +104,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         });
     }
 
-    fetchWork = (): Promise<ITickerChange[]> => {
+    fetchWork = (): Promise<BaseStockEvent[]> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#fetchWork():CALLED`);
         return this.datasource.scrapeDatasource()
         .catch((err: Error) => {
@@ -119,7 +120,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         This should simply be a function for fetching work in a service, the only time a worker should have it process method invoked, is if there is data to supply to it.
     */
 
-    preProcess = async (): Promise<ITickerChange> => {
+    preProcess = async (): Promise<BaseStockEvent> => {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`);
 
         //TODO: Move this higher up to the service. This should not be a requirement for each time the workers process a ticker
@@ -141,17 +142,16 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
             //Now update what is processable
             const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
             //TODO: This should *ONLY* be done everytime that we fetchWork().. we duplicate and expontentially increase the amount of work to be done by doing this here.
-            //@ts-ignore
-            this.processables = this.processables.filter((tkr: ITickerChange) => !keys.includes(tkr.sym));
+            this.processables = this.processables.filter((tkr: BaseStockEvent) => !keys.includes(tkr.ticker));
             return Promise.resolve(ticker);
         } else {
             // this.logger.log(LogLevel.INFO, `this.processables.length = ${this.processables.length}`);
             //Resupply the the work array, and try to process work again
             return this.fetchWork()
-            .then((tickers: ITickerChange[]) => {
+            .then((tickers: BaseStockEvent[]) => {
                 //This filters out tickers that are timed out.
                 const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
-                this.processables = tickers.filter((ticker: ITickerChange) => !keys.includes(ticker.ticker));
+                this.processables = tickers.filter((ticker: BaseStockEvent) => !keys.includes(ticker.ticker));
                 this.logger.log(LogLevel.INFO, `this.processables.length after filter = ${this.processables.length}`)
 
                 //TODO: The current problem we have here, is that if we have multiple workers, when `this.preProcess()` is called, 
@@ -166,7 +166,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
                     //TODO: This logic should be moved to _fetchTickerInfo
                     //NOTE: This is some edgecase code
                     const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
-                    if(this.processables.some((ticker: ITickerChange) => !keys.includes(ticker.ticker))) {
+                    if(this.processables.some((ticker: BaseStockEvent) => !keys.includes(ticker.ticker))) {
                         this.logger.log(LogLevel.INFO, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
                         const pendingPromises = Array.from(this.datasource.timedOutTickers.values()).map(p => p.promise);
 
@@ -188,7 +188,7 @@ export class StockService extends Service<ITickerChange, ITickerChange> {
         }
     }
 
-    makeWorker(options: IWorkerOptions): IWorker<ITickerChange> {
+    makeWorker(options: IWorkerOptions): IWorker<BaseStockEvent> {
         //TODO: Update this typing
         //@ts-ignore
         return new this.mainWorker({
