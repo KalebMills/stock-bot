@@ -1,6 +1,6 @@
-export type PolygonMarketHolidays = MarketHolidaysArray[]
+export type PolygonMarketHolidays = MarketHoliday[]
 
-export interface MarketHolidaysArray {
+export interface MarketHoliday {
     exchange: string,
     market: string,
     date: string,

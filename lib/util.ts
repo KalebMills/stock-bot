@@ -3,9 +3,10 @@ import * as cp from 'child_process';
 import * as winston from 'winston';
 import { Logger } from './base';
 import { RequestError } from './exceptions';
-import { PolygonMarketHolidays } from '../types/polygonMarketHolidays';
+import { MarketHoliday, PolygonMarketHolidays } from '../types/polygonMarketHolidays';
 import Axios from 'axios';
 import { Snapshot } from '../types';
+import moment from 'moment';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -75,33 +76,38 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
     })
 }
 
-export const returnLastOpenDay = async (date: Date): Promise<number> => {
-    if(await getMarketStatusOnDate(date) === 'CLOSED') {
-        date.setDate(date.getDate() - 1)
-        return returnLastOpenDay(date);
-    }
-    return date.getDate()
-    
+export const returnLastOpenDay = (date: Date): Promise<number> => {
+    return getMarketStatusOnDate(date)
+    .then(marketStatus => {
+        if (marketStatus === 'CLOSED') {
+            date.setDate(date.getDate() - 1);
+            return returnLastOpenDay(date);
+        } else {
+            return date.getDate();
+        }
+    });
 }
 
 export const getMarketStatusOnDate = async (date: Date): Promise<MarketStatus> => {
-    const isWeekend: boolean = date.getDay() % 6 == 0 ? true: false
-    let holidays: PolygonMarketHolidays[] = await getMarketHolidays().then((data: AxiosResponse) => data.data)
+
+    const isWeekend: boolean = !!(date.getDay() % 6 === 0);
+    const holidays: MarketHoliday[] = await getMarketHolidays();
     const isHoliday: boolean = holidays.some((holiday: any) => {
-        let holidayDate = new Date(Date.parse(holiday.date))
+        let holidayDate = new Date(Date.parse(holiday.date));
+
         return holidayDate.getDate() == date.getDate() &&
-        holidayDate.getMonth() == date.getMonth()
-    })
-    return (isHoliday || isWeekend) ? 'CLOSED' : 'OPEN'
+        holidayDate.getMonth() == date.getMonth();
+    });
+    return (isHoliday || isWeekend) ? 'CLOSED' : 'OPEN';
 }
 
-export const getMarketHolidays = (): Promise<AxiosResponse> => {
+export const getMarketHolidays = (): Promise<MarketHoliday[]> => {
     return axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
         params: {
             apiKey: process.env['ALPACAS_API_KEY'] || "",
         }
     })
-    .then((data: AxiosResponse)=> data)
+    .then((data: AxiosResponse<MarketHoliday[]>) => data.data)
     .catch(err => {
         return Promise.reject(new RequestError(`Error in _getMarketHolidays(): innerError: ${err} -- ${JSON.stringify(err)}`));
     })
@@ -120,13 +126,11 @@ export const convertDate = (date: Date): string => {
 
 export const minutesSinceOpen = (): number => {
     const now: Date = new Date()
-    const marketOpen: Date = new Date()
-    //TODO - definitely needs to be changed, set this to market open at UTC, will need to account for daylight savings
-    // Can probobly use moment for this
-    marketOpen.setHours(14)
-    marketOpen.setMinutes(30)
-    const minutesPassed: number = Math.round((now.getTime() - marketOpen.getTime())/60000)
-    return minutesPassed
+    const marketOpen: moment.Moment = moment();
+    
+    marketOpen.set({ hour: 14, minutes: 30 });
+    const minutesPassed: number = Math.round((now.getTime() - marketOpen.toDate().getTime()) / 60000)
+    return minutesPassed;
 }
 
 export const getTickerSnapshot = (ticker: string): Promise<Snapshot> => {
