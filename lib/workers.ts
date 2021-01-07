@@ -8,8 +8,10 @@ import * as exception from './exceptions';
 import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
-import * as uuid from 'uuid';
 import { IDataSource } from './data-source';
+import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, minutesSinceOpen, returnLastOpenDay } from './util';
+import { RequestError } from './exceptions';
+import { PolygonAggregates, PolygonTickerSnapshot } from '../types';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -224,26 +226,44 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
                 //If the change percent is greater than .5% per minute, notify
                 if (changePercentPerMinute > .009 && timeTaken >= 180) {
-                    this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase to notify in Discord`)
-                    
-                    return this.notification.notify({
-                        ticker: currTrade.sym,
-                        price: currTrade.p,
-                        message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute} per minute.`,
-                        additionaData: {
-                            'Exchange': this.exchange.constructor.name,
-                            'DataSource': this.datasource.constructor.name,
-                            'Measure Time': `${((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60} Minutes`,
-                            'Previous Price': `${prevTrade.p}`,
-                            'Action Recommendation': 'Purchase',
+
+                    const confidenceOptions: ConfidenceScoreOptions = {
+                        'relativeVolume': {
+                            value: 5,
+                            process: this._getRelativeVolume(currTrade.sym).then(data => !!(data > 2))
+                        },
+                        'vwap': {
+                            value: 5,
+                            process: getTickerSnapshot(currTrade.sym).then(data => (data.day.vw > currTrade.p))
                         }
-                    })
-                    .then(() => {
-                        this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
+                    }
+
+                    //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
+                    return getConfidenceScore(confidenceOptions)
+                    .then((confidenceScore: number) => {
+                        if (confidenceScore >= 49) {
+                            this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase and confidence to notify in Discord`)
+                        
+                            return this.notification.notify({
+                                ticker: currTrade.sym,
+                                price: currTrade.p,
+                                message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
+                                additionaData: {
+                                    'Exchange': this.exchange.constructor.name,
+                                    'DataSource': this.datasource.constructor.name,
+                                    'Measure Time': `${(((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60).toFixed(2)} Minutes`,
+                                    'Previous Price': `${prevTrade.p}`,
+                                    'Action Recommendation': 'Purchase',
+                                    'Confidence Score': `${confidenceScore}%`
+                                }
+                            })
+                            .then(() => {
+                                this.logger.log(LogLevel.INFO, `${this.notification.constructor.name}#notify():SUCCESS`);
+                            });
+                        } else {
+                            this.logger.log(LogLevel.INFO, `Confidence score too low`);
+                        }
                     });
-                } else {
-                    this.logger.log(LogLevel.TRACE, `${currTrade.sym} did not meet the standard, it's changePerMinute = ${this._getChangePercentPerMinute(currTrade, prevTrade)}`)
-                    return;
                 }
             }
         })
@@ -274,4 +294,44 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
     close(): Promise<void> {
         return super.close();
     }
+
+    /**
+     * Calculates the relative volume.
+     * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
+     * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
+    */
+    private async _getRelativeVolume (ticker: string): Promise<number> {
+        const lastDay: Date = new Date()
+        const yesterday: Date = new Date()
+
+        yesterday.setDate(yesterday.getDate() - 1)
+        lastDay.setDate(await returnLastOpenDay(yesterday))
+        
+        const lastDate: string = convertDate(lastDay)
+
+        const minutesPassed: number = minutesSinceOpen()
+
+        return Promise.all([
+            axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
+                params: {
+                    apiKey: process.env['ALPACAS_API_KEY'] || "",
+                    sort: 'asc',
+                    limit: minutesPassed
+                }
+            }), axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {
+                params: {
+                    apiKey: process.env['ALPACAS_API_KEY'] || "",
+                }
+            })
+        ])
+        .then((data: AxiosResponse<any>[]) => { 
+            const lastDay: PolygonAggregates = data[0].data
+            const today: PolygonTickerSnapshot = data[1].data
+            return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.ticker.day.v)
+        }).catch(err => {
+            return Promise.reject(new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
+        })
+    }
+
+    
 }

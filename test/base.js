@@ -21,7 +21,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const base_1 = require("../lib/base");
 const winston_1 = require("winston");
-const assert = __importStar(require("assert"));
 const winston = __importStar(require("winston"));
 //Fake classes for tests
 class TestExchange {
@@ -78,32 +77,32 @@ const WORKER_COUNT = 10;
 //TODO: This typing is very strange. Fix
 let service;
 let worker;
-describe('#Base Service', () => {
-    it('Can constuct a Service instance', () => {
-        service = new TestService({
-            concurrency: WORKER_COUNT,
-            logger,
-            workerOptions: {
-                logger,
-                id: 'TEST',
-                //@ts-ignore
-                _preProcessor: () => Promise.resolve(),
-                exceptionHandler: () => { }
-            }
-        });
-        assert.equal(service instanceof base_1.Service, true);
-    });
-    it('Can create multiple workers', () => {
-        return service.initialize()
-            .then(() => {
-            assert.equal(service.workers.size === 10, true);
-        });
-    });
-    //In the future, we would want the Service process to stay running, in the case where workers are dynamic, and are created more as threads vs static running processes
-    it('Can close all workers, and close the process', () => {
-        return service.close()
-            .then(() => {
-            assert.equal(service.workers.size === 0, true);
-        });
-    });
-});
+// describe('#Base Service', () => {
+//     it('Can constuct a Service instance', () => {
+//         service = new TestService({
+//             concurrency: WORKER_COUNT,
+//             logger,
+//             workerOptions: {
+//                 logger,
+//                 id: 'TEST',
+//                 //@ts-ignore
+//                 _preProcessor: () => Promise.resolve(),
+//                 exceptionHandler: () => {}
+//             }
+//         });
+//         assert.equal(service instanceof Service, true);
+//     });
+//     it('Can create multiple workers', () => {
+//         return service.initialize()
+//         .then(() => {
+//             assert.equal(service.workers.size === 10, true);
+//         });
+//     });
+//    //In the future, we would want the Service process to stay running, in the case where workers are dynamic, and are created more as threads vs static running processes
+//     it('Can close all workers, and close the process', () => {
+//         return service.close()
+//         .then(() => {
+//             assert.equal(service.workers.size === 0, true);
+//         });
+//     });
+// });
