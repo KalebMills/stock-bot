@@ -1,12 +1,12 @@
 const joi = require('joi');
 const { PolygonLiveDataSource } = require('../lib/data-source');
-const { RedisDataStore } = require('../lib/data-store');
+const { RedisDataStore, MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const discord = require('discord.js');
-const { PhonyExchange } = require('../lib/exchange');
+const { PhonyExchange, AlpacasExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
-const { DiscordNotification } = require('../lib/notification');
+const { DiscordNotification, FileWriterNotification } = require('../lib/notification');
 const { LiveDataStockWorker } = require('../lib/workers');
 const fs = require('fs');
 
@@ -37,16 +37,14 @@ const datasourceOptions = {
     logger,
     //TODO: This needs to be changed to be an abstract method of the DataSource class
     validationSchema: joi.object({}),
-    subscribeTicker: t
+    tickers: t
 }
 
 const DISCORD_CLIENT = new discord.Client({});
 
 const datasource = new PolygonLiveDataSource(datasourceOptions);
 
-const datastore = new RedisDataStore({
-    host: 'localhost',
-    port: 6379,
+const datastore = new MemoryDataStore({
     logger
 });
 
@@ -63,6 +61,20 @@ const exchange = new PhonyExchange({
     logger,
 });
 
+// const exchange = new AlpacasExchange({
+//     logger,
+//     acceptableGain: {
+//         type: 'percent',
+//         unit: 1
+//     },
+//     acceptableLoss: {
+//         type: 'percent',
+//         unit: 1
+//     },
+//     keyId: process.env['ALPACAS_API_KEY'],
+//     secretKey: process.env['ALPACAS_SECRET_KEY']
+// });
+
 const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
@@ -72,8 +84,14 @@ const notification = new DiscordNotification({
 });
 
 
+// TODO: Make a simulation.js config for running historical trade data
+// const notification = new FileWriterNotification({
+//     logger,
+//     filePath: path.join(__dirname, '..', 'logs', 'notifications.txt')
+// });
+
 const serviceOptions = {
-    concurrency: 1,
+    concurrency: 10,
     logger,
     datasource,
     datastore,

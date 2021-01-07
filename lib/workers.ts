@@ -1,4 +1,5 @@
 import { Worker, IWorker, IWorkerOptions, LogLevel, Logger } from './base';
+import * as util from './util';
 import axios, { AxiosResponse } from 'axios';
 import { AlpacasExchange, Exchange } from './exchange';
 import * as Alpacas from '@master-chief/alpaca';
@@ -70,6 +71,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                 return this.notification.notify({
                     ticker: ticker.ticker,
                     price: ticker.price,
+                    eventTimestamp: Date.now(),
                     volume: Number(ticker.currentVol),
                     message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
@@ -93,6 +95,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                 return this.notification.notify({
                     ticker: ticker.ticker,
                     price: ticker.price,
+                    eventTimestamp: Date.now(),
                     message: `${ticker.ticker} would not alert, it is ${changePercent.persuasion} ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
                         'Exchange': this.exchange.constructor.name,
@@ -225,8 +228,10 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .009 && timeTaken >= 180) {
+                //TODO: Make these values configuration via workerOptions
+                if (changePercentPerMinute > .035 && timeTaken >= 180) {
 
+                    //TODO: We now need a way to MOCK these, in the case where this is used in a test harness, and that current day's values are not what is expected in the Back Test
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
                             value: 5,
@@ -241,11 +246,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
-                        if (confidenceScore >= 49) {
+                        if (confidenceScore == 100) {
                             this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
                                 ticker: currTrade.sym,
+                                eventTimestamp: currTrade.t,
                                 price: currTrade.p,
                                 message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
                                 additionaData: {
@@ -270,7 +276,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         .then(() => {
             this.logger.log(LogLevel.INFO, `Completed process()`);
         })
-        .finally(() => this.datastore.save(currTrade.sym, currTrade)); //Timeout each ticker for 3 minutes
+        .finally(() => this.datastore.save(currTrade.sym, currTrade).then(() => this.datasource.timeoutTicker(currTrade.sym, 180))); //Timeout each ticker for 3 minutes
     }
 
     /**

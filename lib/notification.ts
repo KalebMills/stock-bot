@@ -1,12 +1,14 @@
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import * as discord from 'discord.js';
-import * as winston from 'winston';
+import * as fs from 'fs';
 
 export interface NotificationOptions {
     ticker: string;
     message: string;
+    eventTimestamp: number;
+    price: number;
     additionaData?: { [key: string]: string | number }
-    price?: number;
+    url?: string;
     volume?: number;
 }
 
@@ -61,7 +63,6 @@ export class DiscordNotification implements INotification {
         .then(channels => channels.cache.find(c => c.name === this.channelName)!)
         .then(channel => channel as discord.TextChannel)
         .then(channel => {
-            // console.log(channel);
             if (channel) {
                 const embed = new discord.MessageEmbed()
                 .setColor('#8030ff')
@@ -69,6 +70,10 @@ export class DiscordNotification implements INotification {
                 .setDescription(`**${message.message}**`)
                 .setTimestamp()
                 .setFooter('StockBot', 'https://icon2.cleanpng.com/20180402/xww/kisspng-chart-graph-of-a-function-infographic-information-stock-market-5ac2c6f186ff53.663225121522714353553.jpg');
+
+                if (message.hasOwnProperty('url')) {
+                    embed.setURL(message['url']!);
+                }
 
                 if (message.price) {
                     embed.addField('Price', `$${message.price}`, true);
@@ -99,6 +104,44 @@ export class DiscordNotification implements INotification {
             this.client.destroy();
             resolve();
         });
+    }
+}
+
+export interface FileWriterNotificationOptions extends BaseNotificationOptions {
+    filePath: string;
+}
+
+/**
+ * A class to write a notification message to a file, line by line.
+ */
+
+export class FileWriterNotification implements INotification {
+    private logger: Logger;
+    private filePath: string;
+
+    constructor(options: FileWriterNotificationOptions) {
+        this.logger = options.logger;
+        this.filePath = options.filePath;
+    }
+
+    initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    notify(options: NotificationOptions): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            fs.appendFile(this.filePath, `${options.eventTimestamp}\n`, (err: NodeJS.ErrnoException | null) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
     }
 }
 

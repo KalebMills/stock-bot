@@ -98,7 +98,7 @@ describe('#StockService', () => {
         // service.datasource.timeoutTicker('APPL', 60000);
         service.datasource.timeoutTicker('MSFT', 60000);
         let TICKER = 'MSFT';
-        service.fetchWork = function () {
+        service.fetchWork = () => {
             //The first time this is called, it will output MSFT as the ticker, all the next times, it will be APPL since TICKER variable is only reassigned once
             return Promise.resolve([{
                     ticker: TICKER,

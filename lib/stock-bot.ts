@@ -121,7 +121,9 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     */
 
     preProcess = async (): Promise<BaseStockEvent> => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`);
+
+        //TODO: Move this higher up to the service. This should not be a requirement for each time the workers process a ticker
         let marketIsOpen = (await this.exchange.isMarketTime());
 
         if (this.isClosed) {
@@ -139,8 +141,6 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             // this.logger.log(LogLevel.TRACE, `Taking ${JSON.stringify(ticker)} out of this.processables, pushing ticker to this.process(${JSON.stringify(ticker)})`);
             //Now update what is processable
             const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
-            //@ts-ignore
-            this.datasource.timeoutTicker(ticker.sym, 180)
             //TODO: This should *ONLY* be done everytime that we fetchWork().. we duplicate and expontentially increase the amount of work to be done by doing this here.
             this.processables = this.processables.filter((tkr: BaseStockEvent) => !keys.includes(tkr.ticker));
             return Promise.resolve(ticker);
@@ -174,7 +174,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
                         .then(() => this.preProcess());
                     } else {
                         this.logger.log(LogLevel.INFO, `this.processables.length = 0, return the backoff promise`);
-                        return BPromise.delay(5000).then(() => this.preProcess())
+                        return BPromise.delay(500).then(() => this.preProcess())
                     }
                 } else {
                     this.logger.log(LogLevel.INFO, `Nothing in this.processables, instead retrying this.preProcess()`);

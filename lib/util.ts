@@ -1,10 +1,13 @@
-import axios, { AxiosResponse } from 'axios';
 import * as cp from 'child_process';
 import * as winston from 'winston';
 import { Logger } from './base';
-import { RequestError } from './exceptions';
-import { MarketHoliday, PolygonMarketHolidays } from '../types/polygonMarketHolidays';
-import Axios from 'axios';
+import * as fs from 'fs';
+import Axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { TradeEvent } from './workers';
+import * as path from 'path';
+import { StringResolvable } from 'discord.js';
+import { RequestError, DefaultError } from './exceptions';
+import { MarketHoliday } from '../types/polygonMarketHolidays';
 import { Snapshot } from '../types';
 import moment from 'moment';
 
@@ -45,13 +48,13 @@ export const createDeferredPromise = (): IDeferredPromise => {
 
 export const inCI = (): boolean => !!process.env['GITHUB_ACTIONS'];
 
-export const runCmd = (cmd: string): Promise<void> => {
+export const runCmd = (cmd: string): Promise<{ stderr: string, stdout: StringResolvable }> => {
     return new Promise((resolve, reject) => {
-        cp.exec(cmd, (err, stdout, stderr) => {
+        cp.exec(cmd, (err, stdout: string, stderr: string) => {
             if (err || stderr) {
                 reject({ err, stderr });
             } else {
-                resolve();
+                resolve({ stderr, stdout });
             }
         })
     });
@@ -74,6 +77,103 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
         transports,
         ...options
     })
+}
+
+export const fetchTickersFromFile = (thePath: string): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+        fs.readFile(thePath, (err, data) => {
+            if (err) {
+                reject(err);
+            } else {
+                let tickers = data.toString().split('\n').filter(ticker => !!ticker);
+                resolve(tickers);
+            }
+        })
+    })
+}
+
+/**
+ * Function to generate a link to a graph in TradingView
+ * @param ticker ticker to create the link for
+ * @returns Link to a graph for the given ticker
+ */
+
+export const fetchTickerGraph = (ticker: string): Promise<string> => {
+    return Axios.get(`https://symbol-search.tradingview.com/symbol_search/?text=${ticker}&exchange=&type=&hl=true&lang=en&domain=production`)
+    .then(data => {
+        const output = data.data[0];
+        console.log(JSON.stringify(output))
+        if (output.hasOwnProperty('prefix')) {
+            return `https://www.tradingview.com/symbols/${output.prefix}-${ticker}/`;
+        } else {
+            return `https://www.tradingview.com/symbols/${output.exchange}-${ticker}/`;
+        }
+    })
+    .catch(err => Promise.reject(new DefaultError(JSON.stringify(err))));
+}
+
+//TODO: Finish writing actual script
+
+/**
+ * Calls a python script to generate a graph, given a JSON file of TradeEvents
+ * @param absolutePathToJsonFile 
+ * @returns path to the generated graph
+ */
+
+export const generatePlotGraphFromTradeEvents = (absolutePathToJsonFile: string): Promise<string> => {
+    const pathToScript = path.join(__dirname, 'resources', 'scripts', 'generate-plot.py');
+    return runCmd(`python3 ${pathToScript} ${absolutePathToJsonFile}`)
+    .then(({ stdout, stderr }) => {
+        if (stderr) {
+            return Promise.reject(stderr);
+        } else {
+            return Promise.resolve(stdout);
+        }
+    });
+}
+
+/**
+ * Given the inputs, returns all trade events for that day 
+ * @param ticker The ticker to get the trade events for
+ * @param date The date which the events will be fetched for
+ * @param timestamp Used for recursion, the timestamp of the last received event
+ * @param events the array of events that is kept through recursion
+ */
+
+export const fetchHistoricTradeEvents = (ticker: string, date: Date, timestamp?: number, events?: TradeEvent[]): Promise<TradeEvent[]> => {
+    let month = (date.getMonth() + 1).toString().length < 2 ? (`0${date.getMonth() + 1}`) : date.getMonth() + 1;
+    let d = (date.getDate()).toString().length < 2 ? (`0${date.getDate()}`) : date.getDate();
+    let day = `${date.getFullYear()}-${month}-${d}`
+    let starterEventArr: TradeEvent[] = events || [];
+
+    let params: AxiosRequestConfig = {
+        params: {
+            limit: 50000,
+            apiKey: process.env['ALPACAS_API_KEY'] || ""
+        }
+    }
+
+    if (timestamp) {
+        params.params = {
+            ...params.params,
+            timestamp
+        };
+    }
+
+    console.log(`Fetching https://api.polygon.io/v2/ticks/stocks/trades/${ticker}/${day}/`)
+
+    return Axios.get(`https://api.polygon.io/v2/ticks/stocks/trades/${ticker}/${day}/`, params).then(data => {
+        return data.data.results as TradeEvent[];
+    })
+    .then(data => {
+        starterEventArr.push(...data);
+        if (data.length == 50000) {
+            return fetchHistoricTradeEvents(ticker, date, starterEventArr[starterEventArr.length - 1].t, starterEventArr);
+        } else {
+            return Promise.resolve(starterEventArr!);
+        }
+    })
+    .catch(err => Promise.reject(new DefaultError(JSON.stringify(err))));
 }
 
 export const returnLastOpenDay = (date: Date): Promise<number> => {
@@ -102,7 +202,7 @@ export const getMarketStatusOnDate = async (date: Date): Promise<MarketStatus> =
 }
 
 export const getMarketHolidays = (): Promise<MarketHoliday[]> => {
-    return axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
+    return Axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
         params: {
             apiKey: process.env['ALPACAS_API_KEY'] || "",
         }
@@ -153,6 +253,17 @@ export interface ConfidenceScoreOptions {
         process: Promise<boolean>
     };
 }
+
+/*
+    TODO: getConfidenceScore should also return what the indicator signals were, so we can also show such information
+    in notifications, and logging when we enable auto buys
+
+
+    {
+        "relativeVolume": true,
+        "vwap": false
+    }
+*/
 
 /**
  * A function that takes in a group of indicators, and based on their value, provides a confidence score based on their signal output

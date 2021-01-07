@@ -1,7 +1,7 @@
 import { LiveDataStockWorker, QuoteEvent, TradeEvent } from '../lib/workers';
 import { AlpacasExchange } from '../lib/exchange';
 import { NotificationOptions, PhonyNotification } from '../lib/notification';
-import { DataSource, PhonyDataSource } from '../lib/data-source';
+import { PhonyDataSource } from '../lib/data-source';
 import { PhonyDataStore } from '../lib/data-store';
 import * as util from '../lib/util';
 import * as joi from 'joi';

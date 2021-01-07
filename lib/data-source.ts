@@ -12,6 +12,10 @@ import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
+import chance from 'chance';
+import * as path from 'path';
+import BPromise from 'bluebird';
+import { IDeferredPromise, createDeferredPromise } from './util';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -213,10 +217,145 @@ export class PolygonGainersLosersDataSource extends DataSource<ITickerChange> im
         return url.toString();
     }
 }
-//TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
 
+
+export interface MockEventEmitterOptions {
+    eventsPerSecond: number;
+    logger: Logger;
+    ticker: string;
+    date: Date;
+}
+
+/**
+ * A Mock Emitter for the PolygonLiveDataSource class, which will simulate running through events to the DataSource\
+ * For now, this class takes in a ticker and date to fetch true historic data for.
+*/
+
+export class MockEventEmitter extends EventEmitter {
+    eventsPerSecond: number;
+    workerThreads: {[id: string]: {
+        id: string,
+        process: Promise<any>
+        active: boolean
+    }}
+    events: TradeEvent[];
+    logger: Logger;
+    ticker: string;
+
+    constructor(options: MockEventEmitterOptions) {
+        super();
+        this.eventsPerSecond = options.eventsPerSecond;
+        this.logger = options.logger;
+        this.workerThreads = {};
+        this.events = [];
+        this.ticker = options.ticker;
+
+        U.fetchHistoricTradeEvents(options.ticker, options.date)
+        .then(events => {
+            this.events = events;
+            for (let i = 0; i <= this.eventsPerSecond; i++) {
+                this.startWorkerThread();
+            }
+
+            //Will cause the PolygonLiveDataSource to be initialized, and begin processing
+            this.emit('SUBSCRIBED');
+        })
+        .catch(err => Promise.reject(err));
+
+
+        console.log(`${this.constructor.name}#constructor():INVOKED`);
+    }
+
+    /**
+     * Creates a Promise that acts as a thread, which will recursively run and emit an event
+     */
+
+    startWorkerThread(): void {
+        let workerId = chance().guid().substr(0, 5);
+        console.log(`Starting Worker Thread ${workerId}`);
+
+        //Spawns an endless recursive process, stores it here
+        //@ts-ignore First we must create the record, then spawn the worker since it executes so quickly, the record must be there for look up
+        this.workerThreads[workerId] = {
+            id: workerId,
+            active: true
+        };
+
+        this.workerThreads[workerId].process = this.execute(workerId);
+
+        
+        return;
+    }
+
+    /**
+     * Creates a process that recursively runs and emits an event
+     * @param id the id of the "process" that is tracked in this.workerThreads
+     */
+
+    execute(id: string): Promise<any> {
+        if (this.workerThreads[id].active) {
+            const data = this.events.shift()!;
+
+            if (data) {
+                data.sym = this.ticker;
+                return Promise.resolve()
+                .then(() => {
+                    //NOTE: Right now, we only support the Trade event for this test
+                    this.emit('TRADE', data);
+                })
+                //Wait between .5 seconds and 1 second
+                .then(() => BPromise.delay(chance().integer({ min: 500, max: 1000 })))
+                .then(() => this.execute(id));
+            } else {
+                return Promise.resolve();
+            }
+        } else {
+            //End recursive loop
+            return Promise.resolve();
+        }
+    }
+
+    /**
+     * Returns a random ticker with a price that has changed a random percentage below 1%
+     */
+
+    // getRandomTickerData(): { ticker: string, price: number } {
+    //     let index = chance().integer({ min: 0, max: (Object.keys(this.tickers).length - 1) });
+    //     let ticker = Object.keys(this.tickers)[index];
+    //     let tickerObj = this.tickers[ticker];
+
+    //     //Only allow for .01% change per event
+    //     let price = chance().integer({ min: tickerObj.price - (tickerObj.price * (Math.random() * .01)) , max: tickerObj.price + (tickerObj.price * (Math.random() * .01)) });
+        
+    //     console.log(`Current Fake Price ${tickerObj.price} -- This Event Price ${price}`)
+    //     //Update the object to the now price
+    //     this.tickers[ticker].price = price;
+
+    //     return {
+    //         ticker,
+    //         price
+    //     }
+    // }
+
+    close(): Promise<any> {
+        //Set all processes to stop
+        Object.values(this.workerThreads).forEach((worker, i) => {
+            this.workerThreads[worker.id].active = false;
+        });
+        this.emit('UNSUBSCRIBED'); //Causes the PolygonLiveDataSource to close it's workers
+
+        this.removeAllListeners();
+
+        //Return the thread Promises
+        return Promise.all( Object.values(this.workerThreads).map(thread => thread.process) );
+    }
+}
+
+
+//TODO: Need to create a client for this url: https://www.barchart.com/stocks/performance/price-change/advances?orderBy=percentChange&orderDir=desc&page=all
 export interface IPolygonLiveDataSourceOptions extends IDataSourceOptions {
-    subscribeTicker: string[];
+    tickers: string[];
+    mockEmitter?: EventEmitter;
 }
 
 export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDataSource<TradeEvent> {
@@ -224,42 +363,48 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
     private data: TradeEvent[];
     private emitter: EventEmitter;
     private polygonConn!: WebSocket;
-    private subscribeTicker: string[];
+    private tickers: string[];
     private initializePromise: U.IDeferredPromise;
     private closePromise: U.IDeferredPromise;
     private apiKey: string;
     
     constructor(options: IPolygonLiveDataSourceOptions) {
         super(options);
-        this.emitter = new EventEmitter();
+        this.emitter = options.mockEmitter || new EventEmitter();
         //TODO: If needed, later on we can require the caller to append the required *.TICKER prefix to allow this for more robust usage
         //TODO: Note, this seems like it should be changed to use TradeEvent, since it's more accurate as it pertains to what people are actually paying per share, since it's price is that of a historic nature
-        this.subscribeTicker = options.subscribeTicker.map(ticker => `T.${ticker}`);
+        this.tickers = options.tickers.map(ticker => `T.${ticker}`);
         this.data = [];
         this.initializePromise = U.createDeferredPromise();
         this.closePromise = U.createDeferredPromise();
         this.scrapeUrl = "wss://socket.polygon.io/stocks";
-        this.polygonConn = new WebSocket(this.scrapeUrl);
         this.apiKey = (process.env['ALPACAS_API_KEY'] || "");
+
+        if (!options.mockEmitter) {
+            this.polygonConn = new WebSocket(this.scrapeUrl);
+        }
 
         //Event Handlers
         //Our generic message handler for incoming messages
-        this.polygonConn.on('message', this._polygonMessageHandler);
+        //If not mocked, listen on the websocket
+        if (!options.mockEmitter) {
+            this.polygonConn.on('message', this._polygonMessageHandler);
 
-        //Once connected, authenticate with Polygon
-        this.emitter.on('CONNECTED', () => {
-            this.polygonConn.send(JSON.stringify({
-                "action": "auth",
-                "params": process.env['ALPACAS_API_KEY']
-            }));
-        });
-        //Once Authenticated, subscribe to tickers
-        this.emitter.on('AUTHENTICATED', () => {
-            this.polygonConn.send(JSON.stringify({
-                "action": "subscribe",
-                "params": `${this.subscribeTicker.join(',')}`
-            }));
-        });
+            //Once connected, authenticate with Polygon
+            this.emitter.on('CONNECTED', () => {
+                this.polygonConn.send(JSON.stringify({
+                    "action": "auth",
+                    "params": process.env['ALPACAS_API_KEY']
+                }));
+            });
+            //Once Authenticated, subscribe to tickers
+            this.emitter.on('AUTHENTICATED', () => {
+                this.polygonConn.send(JSON.stringify({
+                    "action": "subscribe",
+                    "params": `${this.tickers.join(',')}`
+                }));
+            });
+        }
 
         //Once subscribed to all tickers, allow initialize method to resolve
         this.emitter.on('SUBSCRIBED', () => this.initializePromise.resolve());
@@ -302,7 +447,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
                 break;
             case 'success':
                 //Used to tell the class when we have successfully subscribed to the last ticker in the list
-                if (data.message.includes(this.subscribeTicker[this.subscribeTicker.length - 1])) {
+                if (data.message.includes(this.tickers[this.tickers.length - 1])) {
                     const eventName = data.message.includes('unsubscribed') ? 'UNSUBSCRIBED' : 'SUBSCRIBED';
                     this.emitter.emit(eventName, this.emitter);
                 }
@@ -317,6 +462,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         NOTE: This message handler only supports the 'status' and 'Q' events, nothing else.
     */
     private _polygonMessageHandler = (data: any): void => {
+        console.log(`Got Message, ${data}`)
         data = JSON.parse(data);
         data = data[0];
         const event = data.ev;
@@ -357,7 +503,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         } else {
             this.polygonConn.send(JSON.stringify({
                 "action": "unsubscribe",
-                "params": this.subscribeTicker.join(',')
+                "params": this.tickers.join(',')
             }));
     
     
