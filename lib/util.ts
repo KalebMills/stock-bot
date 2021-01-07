@@ -78,7 +78,7 @@ export const createLogger = (options: Partial<winston.LoggerOptions>): Logger =>
 export const returnLastOpenDay = async (date: Date): Promise<number> => {
     if(await getMarketStatusOnDate(date) === 'CLOSED') {
         date.setDate(date.getDate() - 1)
-        await returnLastOpenDay(date)
+        return returnLastOpenDay(date);
     }
     return date.getDate()
     
