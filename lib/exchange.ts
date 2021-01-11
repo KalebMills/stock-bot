@@ -3,6 +3,7 @@ import * as Alpacas from '@master-chief/alpaca';
 import BPromise from 'bluebird';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import color from 'chalk';
+import { getCurrentMarketStatus } from './util';
 
 export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
     logger: Logger;
@@ -84,7 +85,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     isMarketTime(): Promise<boolean> {
-        return Promise.resolve(true);
+        return Promise.resolve(getCurrentMarketStatus().then((status: string)=>status=='open'));
         // return this.getClock()
         // .then(data => data.is_open);
     }
