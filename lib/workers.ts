@@ -210,7 +210,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
     process(currTrade: TradeEvent): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
         const ticker = currTrade.sym
-        return this.datastore.get(currTrade.sym) //Fetch the previous quote
+        return this.datastore.get(ticker) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: TradeEvent[]) => {
             if (!(data.length === 1)) {
@@ -246,12 +246,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
                         if (confidenceScore >= 49) {
-                            this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase and confidence to notify in Discord`)
+                            this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
-                                ticker: currTrade.sym,
+                                ticker: ticker,
                                 price: currTrade.p,
-                                message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
+                                message: `Ticker ${ticker} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
                                 additionaData: {
                                     'Exchange': this.exchange.constructor.name,
                                     'DataSource': this.datasource.constructor.name,
@@ -274,7 +274,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         .then(() => {
             this.logger.log(LogLevel.INFO, `Completed process()`);
         })
-        .finally(() => this.datastore.save(currTrade.sym, currTrade)); //Timeout each ticker for 3 minutes
+        .finally(() => this.datastore.save(ticker, currTrade)); //Timeout each ticker for 3 minutes
     }
 
     /**
