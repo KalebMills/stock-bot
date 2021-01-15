@@ -198,3 +198,15 @@ export const isHighVolume = (ticker: string): Promise<boolean> => {
         return data.day.v > threshold || data.prevDay.v > threshold
     })
 }
+
+export const getCurrentMarketStatus = (): Promise<string> => {
+    return Axios.get(`https://api.polygon.io/v1/marketStatus/now`, {
+        params: {
+            apiKey: process.env['ALPACAS_API_KEY'] || ""
+        }
+    })
+    .then((data: AxiosResponse<any>) => {
+        return data.data.market;
+    })
+    .catch((err: Error) => Promise.reject(new RequestError(err.message)));
+}
