@@ -190,6 +190,15 @@ export const getConfidenceScore = (options: ConfidenceScoreOptions): Promise<num
     });
 }
 
+//TODO: We are making duplicate calls (call to getTickerSnapshot in this class), need to consolidate
+export const isHighVolume = (ticker: string): Promise<boolean> => {
+    //TODO: make this configurable via config file/process.env
+    const threshold = 1000000
+    return getTickerSnapshot(ticker).then((data: Snapshot)=> {
+        return data.day.v > threshold || data.prevDay.v > threshold
+    })
+}
+
 export const getCurrentMarketStatus = (): Promise<string> => {
     return Axios.get(`https://api.polygon.io/v1/marketStatus/now`, {
         params: {

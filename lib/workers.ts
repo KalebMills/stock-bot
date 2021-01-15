@@ -9,9 +9,9 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, minutesSinceOpen, returnLastOpenDay } from './util';
+import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
 import { RequestError } from './exceptions';
-import { PolygonAggregates, PolygonTickerSnapshot } from '../types';
+import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -209,12 +209,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
     */
     process(currTrade: TradeEvent): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
-
-        return this.datastore.get(currTrade.sym) //Fetch the previous quote
+        const ticker = currTrade.sym
+        return this.datastore.get(ticker) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: TradeEvent[]) => {
             if (!(data.length === 1)) {
-                this.logger.log(LogLevel.INFO, `No data in datastore for ${currTrade.sym}`);
+                this.logger.log(LogLevel.INFO, `No data in datastore for ${ticker}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
                 return Promise.resolve();
             } else {
@@ -222,7 +222,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 const [prevTrade]: TradeEvent[] = data;
                 const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
-                this.logger.log(LogLevel.INFO, `${currTrade.sym} has changed ${changePercentPerMinute} per minute.`);
+                this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
                 if (changePercentPerMinute > .009 && timeTaken >= 180) {
@@ -230,11 +230,15 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
                             value: 5,
-                            process: this._getRelativeVolume(currTrade.sym).then(data => !!(data > 2))
+                            process: this._getRelativeVolume(ticker).then(data => !!(data > 2))
                         },
                         'vwap': {
                             value: 5,
-                            process: getTickerSnapshot(currTrade.sym).then(data => (data.day.vw > currTrade.p))
+                            process: getTickerSnapshot(ticker).then(data => (data.day.vw > currTrade.p))
+                        },
+                        'totalVolume': {
+                            value: 5,
+                            process: isHighVolume(ticker)
                         }
                     }
 
@@ -242,12 +246,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
                         if (confidenceScore >= 49) {
-                            this.logger.log(LogLevel.INFO, `${currTrade.sym} has the required increase and confidence to notify in Discord`)
+                            this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
-                                ticker: currTrade.sym,
+                                ticker: ticker,
                                 price: currTrade.p,
-                                message: `Ticker ${currTrade.sym} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
+                                message: `Ticker ${ticker} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
                                 additionaData: {
                                     'Exchange': this.exchange.constructor.name,
                                     'DataSource': this.datasource.constructor.name,
@@ -270,7 +274,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         .then(() => {
             this.logger.log(LogLevel.INFO, `Completed process()`);
         })
-        .finally(() => this.datastore.save(currTrade.sym, currTrade)); //Timeout each ticker for 3 minutes
+        .finally(() => this.datastore.save(ticker, currTrade)); //Timeout each ticker for 3 minutes
     }
 
     /**
@@ -318,16 +322,12 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     sort: 'asc',
                     limit: minutesPassed
                 }
-            }), axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {
-                params: {
-                    apiKey: process.env['ALPACAS_API_KEY'] || "",
-                }
-            })
+            }), getTickerSnapshot(ticker)
         ])
-        .then((data: AxiosResponse<any>[]) => { 
+        .then((data) => { 
             const lastDay: PolygonAggregates = data[0].data
-            const today: PolygonTickerSnapshot = data[1].data
-            return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.ticker.day.v)
+            const today: Snapshot = data[1]
+            return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.day.v)
         }).catch(err => {
             return Promise.reject(new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
         })
