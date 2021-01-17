@@ -12,6 +12,7 @@ import { IDataSource } from './data-source';
 import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
+import { ConfidenceScore } from './confidence-score';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -225,22 +226,9 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .009 && timeTaken >= 180) {
-
-                    const confidenceOptions: ConfidenceScoreOptions = {
-                        'relativeVolume': {
-                            value: 5,
-                            process: this._getRelativeVolume(ticker).then(data => !!(data > 2))
-                        },
-                        'vwap': {
-                            value: 5,
-                            process: getTickerSnapshot(ticker).then(data => (data.day.vw > currTrade.p))
-                        },
-                        'totalVolume': {
-                            value: 5,
-                            process: isHighVolume(ticker)
-                        }
-                    }
+                if (timeTaken >= 180) {
+                    const confidence =  new ConfidenceScore(ticker)
+                    const confidenceOptions = confidence.getConfidenceOptions(currTrade, changePercentPerMinute).then((options)=> options)
 
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     return getConfidenceScore(confidenceOptions)
@@ -298,40 +286,4 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
     close(): Promise<void> {
         return super.close();
     }
-
-    /**
-     * Calculates the relative volume.
-     * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
-     * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
-    */
-    private async _getRelativeVolume (ticker: string): Promise<number> {
-        const lastDay: Date = new Date()
-        const yesterday: Date = new Date()
-
-        yesterday.setDate(yesterday.getDate() - 1)
-        lastDay.setDate(await returnLastOpenDay(yesterday))
-        
-        const lastDate: string = convertDate(lastDay)
-
-        const minutesPassed: number = minutesSinceOpen()
-
-        return Promise.all([
-            axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
-                params: {
-                    apiKey: process.env['ALPACAS_API_KEY'] || "",
-                    sort: 'asc',
-                    limit: minutesPassed
-                }
-            }), getTickerSnapshot(ticker)
-        ])
-        .then((data) => { 
-            const lastDay: PolygonAggregates = data[0].data
-            const today: Snapshot = data[1]
-            return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.day.v)
-        }).catch(err => {
-            return Promise.reject(new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
-        })
-    }
-
-    
 }
