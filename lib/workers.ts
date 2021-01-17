@@ -9,9 +9,6 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
-import { RequestError } from './exceptions';
-import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 import { ConfidenceScore } from './confidence-score';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
@@ -213,7 +210,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         const ticker = currTrade.sym
         return this.datastore.get(ticker) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
-        .then((data: TradeEvent[]) => {
+        .then(async (data: TradeEvent[]) => {
             if (!(data.length === 1)) {
                 this.logger.log(LogLevel.INFO, `No data in datastore for ${ticker}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
@@ -228,10 +225,10 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 //If the change percent is greater than .5% per minute, notify
                 if (timeTaken >= 180) {
                     const confidence =  new ConfidenceScore(ticker)
-                    const confidenceOptions = confidence.getConfidenceOptions(currTrade, changePercentPerMinute).then((options)=> options)
+                    const confidenceOptions = await confidence.getConfidenceOptions(currTrade, changePercentPerMinute).then((options)=> options)
 
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
-                    return getConfidenceScore(confidenceOptions)
+                    return confidence.getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
                         if (confidenceScore >= 49) {
                             this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)

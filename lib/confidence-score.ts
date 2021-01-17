@@ -1,4 +1,3 @@
-import { Promise } from 'bluebird'
 import { Snapshot } from '../types'
 import { _getRelativeVolume, getTickerSnapshot } from './util'
 import { TradeEvent } from './workers'
@@ -18,6 +17,7 @@ export class ConfidenceScore {
     async getConfidenceOptions (currTrade: TradeEvent, changePercentPerMinute: number): Promise<ConfidenceScoreOptions> {
         const confidenceOptions: ConfidenceScoreOptions = {}
 
+        // for the following equations the denominator is the interval and the multiplier is the weight. Need a more elegant way of configuring this
         const relativeVolume: Promise<number> = _getRelativeVolume(this.ticker).then((data: number) => data)
         confidenceOptions.relativeVolume = {
             process: relativeVolume.then((vol)=>!!(vol>1)),
@@ -44,14 +44,16 @@ export class ConfidenceScore {
      * @returns A number, which will be between 0-100, which indicates the confidence of the indicators
      */
 
-    getConfidenceScore (options: ConfidenceScoreOptions): Promise<number> {
+    async getConfidenceScore (options: ConfidenceScoreOptions): Promise<number> {
         console.log(`getConfidenceScore():INVOKED`);
+
+        let ConfidenceScoreOptions = await options
         let summedValues: number = 0;
         let summedFalseSignalValues: number = 0;
         let processes: Promise<[boolean, number]>[] = [];
 
-        Object.keys(options).forEach((key: string) => {
-            let indicator = options[key];
+        Object.keys(ConfidenceScoreOptions).forEach((key: string) => {
+            let indicator = ConfidenceScoreOptions[key];
             //Allows us to map the given value of an indicator, to it's process once it has resolved.
             processes.push(Promise.all([indicator.process, indicator.score]).then((values: [boolean, number]) => [values[0], values[1]]));
         });

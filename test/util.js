@@ -20,6 +20,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("../lib/util");
+const confidence_score_1 = require("../lib/confidence-score");
 const assert = __importStar(require("assert"));
 describe('#createDeferredPromise', () => {
     it('Can defer a Promise properly', () => {
@@ -33,12 +34,13 @@ describe('#createDeferredPromise', () => {
 });
 describe('#getConfidenceScore', () => {
     it('Can give me the expected score of 10 fake indicators', () => {
+        let confidence = new confidence_score_1.ConfidenceScore('FAKE');
         const expectedScore = 45.45;
         const indicators = {};
         for (let i = 1; i <= 10; i++) {
             let value = i;
             indicators[i] = {
-                value,
+                score: Promise.resolve(value),
                 process: Promise.resolve().then(() => {
                     if (value % 2) {
                         return true;
@@ -49,7 +51,7 @@ describe('#getConfidenceScore', () => {
                 })
             };
         }
-        return util_1.getConfidenceScore(indicators)
+        return confidence.getConfidenceScore(indicators)
             .then(confidenceScore => {
             assert.deepStrictEqual(confidenceScore, expectedScore);
         });

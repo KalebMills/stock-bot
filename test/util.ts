@@ -1,6 +1,6 @@
-import { getConfidenceScore, ConfidenceScoreOptions, createDeferredPromise } from '../lib/util';
+import { createDeferredPromise } from '../lib/util';
+import { ConfidenceScore, ConfidenceScoreOptions } from '../lib/confidence-score';
 import * as assert from 'assert';
-import chance from 'chance';
 
 describe('#createDeferredPromise', () => {
     it('Can defer a Promise properly', () => {
@@ -16,12 +16,13 @@ describe('#createDeferredPromise', () => {
 
 describe('#getConfidenceScore', () => {
     it('Can give me the expected score of 10 fake indicators', () => {
+        let confidence = new ConfidenceScore('FAKE')
         const expectedScore = 45.45;
         const indicators: ConfidenceScoreOptions = {};
         for (let i = 1; i <= 10; i++) {
             let value = i;
             indicators[i] = {
-                value,
+                score: Promise.resolve(value),
                 process: Promise.resolve().then(() => {
                     if (value % 2) {
                         return true;
@@ -32,7 +33,7 @@ describe('#getConfidenceScore', () => {
             }
         }
 
-        return getConfidenceScore(indicators)
+        return confidence.getConfidenceScore(indicators)
         .then(confidenceScore => {
             assert.deepStrictEqual(confidenceScore, expectedScore);
         });
