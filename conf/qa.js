@@ -1,6 +1,6 @@
 const joi = require('joi');
 const { PolygonLiveDataSource } = require('../lib/data-source');
-const { RedisDataStore } = require('../lib/data-store');
+const { RedisDataStore, MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const discord = require('discord.js');
@@ -44,11 +44,13 @@ const DISCORD_CLIENT = new discord.Client({});
 
 const datasource = new PolygonLiveDataSource(datasourceOptions);
 
-const datastore = new RedisDataStore({
-    host: 'localhost',
-    port: 6379,
-    logger
-});
+// const datastore = new RedisDataStore({
+//     host: 'localhost',
+//     port: 6379,
+//     logger
+// });
+
+const datastore = new MemoryDataStore({ logger });
 
 const diagnostic = new DiscordDiagnosticSystem({
     logger,
@@ -73,7 +75,7 @@ const notification = new DiscordNotification({
 
 
 const serviceOptions = {
-    concurrency: 1,
+    concurrency: 10,
     logger,
     datasource,
     datastore,
