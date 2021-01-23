@@ -15,13 +15,19 @@ const logger = winston.createLogger({
         new winston.transports.Console(),
         new winston.transports.File({
             dirname: process.env['STOCK_LOG_DIR'] || path.join(__dirname, '..', 'logs'),
-            filename: `${new Date().toISOString()}-${process.env['CONFIG_FILE'] || "LOCAL"}.log`
+            filename: `${new Date().toISOString()}-${process.env['CONFIG_FILE'] || "LOCAL"}.log`,
+            format: winston.format.combine(
+                winston.format.colorize(),
+                winston.format.simple(),
+                winston.format.timestamp()
+            )
         })
     ],
     level: "info",
     format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.simple()
+        winston.format.simple(),
+        winston.format.timestamp()
     )
 });
 
@@ -30,7 +36,9 @@ const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.tx
 let t = [];
 
 data.forEach((ticker, i) => {
-    t.push(ticker);
+    if (ticker.length <= 4 && !(t.includes('-'))) {
+        t.push(ticker);
+    }
 });
 
 const datasourceOptions = {
