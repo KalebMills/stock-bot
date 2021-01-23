@@ -286,7 +286,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
     }
 
     scrapeDatasource(): Promise<TradeEvent[]> {
-        this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`);
+        this.logger.log(LogLevel.TRACE, `this.processables = ${this.data.length}`);
         let output = [...this.data];
         this.data = [];
         return Promise.resolve(output);

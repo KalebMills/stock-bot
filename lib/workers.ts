@@ -208,12 +208,13 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         
     */
     process(currTrade: TradeEvent): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name} processing ${currTrade.ticker}`);
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
         const ticker = currTrade.sym
         return this.datastore.get(ticker) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: TradeEvent[]) => {
-            if (!(data.length === 1)) {
+            if (data.length !== 1) {
                 this.logger.log(LogLevel.TRACE, `No data in datastore for ${ticker}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
                 return Promise.resolve();
@@ -222,10 +223,11 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 const [prevTrade]: TradeEvent[] = data;
                 const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
-                this.logger.log(LogLevel.TRACE, `${ticker} has changed ${changePercentPerMinute} per minute.`);
+                this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute over ${timeTaken} minutes.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > .05 && timeTaken >= 180) {
+                if (changePercentPerMinute > .01 && timeTaken >= 180) {
+                    this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute. Checking confidence score..`);
 
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
@@ -245,7 +247,8 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
-                        if (confidenceScore >= 67) {
+                        this.logger.log(LogLevel.INFO, `Fetched confidence score for ${ticker} - Got Score: ${confidenceScore}`);
+                        if (confidenceScore >= 33.33) {
                             this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
@@ -304,7 +307,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
      * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
      * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
     */
-    private async _getRelativeVolume (ticker: string): Promise<number> {
+    async _getRelativeVolume (ticker: string): Promise<number> {
         const lastDay: Date = new Date()
         const yesterday: Date = new Date()
 

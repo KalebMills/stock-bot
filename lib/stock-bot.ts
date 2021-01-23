@@ -173,11 +173,11 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
                         return Promise.all(pendingPromises)
                         .then(() => this.preProcess());
                     } else {
-                        this.logger.log(LogLevel.WARN, `this.processables.length = 0, return the backoff promise`);
+                        this.logger.log(LogLevel.TRACE, `this.processables.length = 0, return the backoff promise`);
                         return BPromise.delay(5000).then(() => this.preProcess())
                     }
                 } else {
-                    this.logger.log(LogLevel.WARN, `Nothing in this.processables, instead retrying this.preProcess()`);
+                    this.logger.log(LogLevel.TRACE, `Nothing in this.processables, instead retrying this.preProcess()`);
                     return this.preProcess();
                 }
             })
