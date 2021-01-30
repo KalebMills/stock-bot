@@ -9,7 +9,7 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { ConfidenceScoreOptions, convertDate, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
+import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 
@@ -213,6 +213,18 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         return this.datastore.get(ticker) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: TradeEvent[]) => {
+            return this.exchange.getClock()
+            .then((d) => {
+                return [d.is_open, data] as [boolean, TradeEvent[]]; //Not sure why I need to do this, the next then block interprets it poorly
+            })            
+        })
+        .then(([isOpen, data]: [boolean, TradeEvent[]]) => {
+
+            if (!isOpen) {
+                this.logger.log(LogLevel.TRACE, `Market currently close, disregarding.`);
+                return;
+            }
+
             if (!(data.length === 1)) {
                 this.logger.log(LogLevel.INFO, `No data in datastore for ${ticker}`);
                 //This is the first receive for a ticker, skip the analysis and just store this event in the DB
@@ -222,19 +234,30 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 const [prevTrade]: TradeEvent[] = data;
                 const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
+
+                const aboveClosePrice = createDeferredPromise();
+                const vwapPromise = getTickerSnapshot(ticker)
+                .then(snapshotData => {
+                    aboveClosePrice.resolve(snapshotData);
+                    return (snapshotData.day.vw > currTrade.p);
+                })
                 this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
-                //If the change percent is greater than .5% per minute, notify
+                //If the change percent is greater than .1% per minute, notify
                 if (changePercentPerMinute > .009 && timeTaken >= 180) {
 
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
                             value: 5,
-                            process: this._getRelativeVolume(ticker).then(data => !!(data > 2))
+                            process: this._getRelativeVolume(ticker).then(relativeVolume => !!(relativeVolume >= 2))
                         },
                         'vwap': {
                             value: 5,
-                            process: getTickerSnapshot(ticker).then(data => (data.day.vw > currTrade.p))
+                            process: vwapPromise
+                        },
+                        'aboveOpenPrice': {     //Note: Probably wouldn't work in pre-market hours
+                            value: 5,
+                            process: aboveClosePrice.promise.then((snapshotData: Snapshot) => !!(currTrade.p > snapshotData.day.o))
                         },
                         'totalVolume': {
                             value: 5,
@@ -243,9 +266,10 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     }
 
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
+                    //TODO: Would be nice to be able to confidenceOptions displayed in additionalData below to see which indicators are giving positive values
                     return getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
-                        if (confidenceScore >= 49) {
+                        if (confidenceScore >= 75) {
                             this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
