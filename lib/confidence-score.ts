@@ -1,5 +1,6 @@
+import { Identifier } from 'typescript'
 import { Snapshot } from '../types'
-import { _getRelativeVolume, getTickerSnapshot } from './util'
+import { createDeferredPromise, getRelativeVolume, getTickerSnapshot } from './util'
 import { TradeEvent } from './workers'
 
 export interface ConfidenceScoreOptions {
@@ -14,26 +15,34 @@ export class ConfidenceScore {
     constructor(ticker: string) {
         this.ticker = ticker
     }
-    async getConfidenceOptions (currTrade: TradeEvent, changePercentPerMinute: number): Promise<ConfidenceScoreOptions> {
+    getConfidenceOptions (currTrade: TradeEvent, changePercentPerMinute: number): ConfidenceScoreOptions {
         const confidenceOptions: ConfidenceScoreOptions = {}
 
         // for the following equations the denominator is the interval and the multiplier is the weight. Need a more elegant way of configuring this
-        const relativeVolume: Promise<number> = _getRelativeVolume(this.ticker).then((data: number) => data)
+        // TODO: explain the equations
+        const relativeVolume: Promise<number> = getRelativeVolume(this.ticker).then((data: number) => data)
+        const volRatio = createDeferredPromise()
+        relativeVolume.then((vol) => {
+            volRatio.resolve(vol)
+        })
         confidenceOptions.relativeVolume = {
-            process: relativeVolume.then((vol)=>!!(vol>1)),
-            score: relativeVolume.then((vol) => vol/1 * 10)
+            process: volRatio.promise.then((vol) => !!(vol>1)),
+            score: volRatio.promise.then((vol) => vol * 15)
         }
         
-        const vwap: Promise<number> = getTickerSnapshot(this.ticker).then((data: Snapshot) => (currTrade.p-data.day.vw)/data.day.vw)
+        const relativeVWAP: Promise<number> = getTickerSnapshot(this.ticker).then((data: Snapshot) => (currTrade.p-data.day.vw)/data.day.vw)
+        const VWAPRatio = createDeferredPromise()
+        relativeVWAP.then((vwap) => {
+            VWAPRatio.resolve(vwap)
+        })
         confidenceOptions.vwap = {
-            process: vwap.then((increase)=>!!(increase>0)),
-            score: vwap.then((increase)=> Math.abs(increase)/0.05 * 5)
+            process: VWAPRatio.promise.then((increase)=>!!(increase>0)),
+            score: VWAPRatio.promise.then((increase)=> Math.abs(increase)/0.05 * 10)
         }
 
-        const process: Promise<boolean> = new Promise(()=> changePercentPerMinute > 0)
         confidenceOptions.changePercentPerMinute = {
-            process: process,
-            score: new Promise(()=>Math.abs(changePercentPerMinute)/0.01 * 2)
+            process: Promise.resolve(changePercentPerMinute>0),
+            score: Promise.resolve(Math.abs(changePercentPerMinute)/0.01 * 2)
         }
         return confidenceOptions
     }

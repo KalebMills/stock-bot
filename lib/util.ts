@@ -172,7 +172,7 @@ export const getCurrentMarketStatus = (): Promise<string> => {
  * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
  * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
 */
-export async function _getRelativeVolume(ticker: string): Promise<number> {
+export async function getRelativeVolume(ticker: string): Promise<number> {
     const lastDay: Date = new Date()
     const yesterday: Date = new Date()
 
@@ -197,6 +197,6 @@ export async function _getRelativeVolume(ticker: string): Promise<number> {
         const today: Snapshot = data[1]
         return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.day.v)
     }).catch(err => {
-        return Promise.reject(new RequestError(`Error in _getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
+        return Promise.reject(new RequestError(`Error in getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
     })
 }
