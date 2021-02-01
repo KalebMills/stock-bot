@@ -51,7 +51,7 @@ export class DiscordNotification implements INotification {
     initialize(): Promise<void> {
         return this.client.login(this.token)
         .then(() => {
-            this.logger.log(LogLevel.TRACE, `${this.constructor.name}#initialize():SUCCESS`);
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
         });
     }
 

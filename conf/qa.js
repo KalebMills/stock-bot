@@ -1,6 +1,6 @@
 const joi = require('joi');
 const { PolygonLiveDataSource } = require('../lib/data-source');
-const { RedisDataStore } = require('../lib/data-store');
+const { RedisDataStore, MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const discord = require('discord.js');
@@ -15,13 +15,19 @@ const logger = winston.createLogger({
         new winston.transports.Console(),
         new winston.transports.File({
             dirname: process.env['STOCK_LOG_DIR'] || path.join(__dirname, '..', 'logs'),
-            filename: `${new Date().toISOString()}-${process.env['CONFIG_FILE'] || "LOCAL"}.log`
+            filename: `${new Date().toISOString()}-${process.env['CONFIG_FILE'] || "LOCAL"}.log`,
+            format: winston.format.combine(
+                winston.format.colorize(),
+                winston.format.simple(),
+                winston.format.timestamp()
+            )
         })
     ],
     level: "info",
     format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.simple()
+        winston.format.simple(),
+        winston.format.timestamp()
     )
 });
 
@@ -30,7 +36,9 @@ const data = fs.readFileSync(path.join(__dirname, '..', 'resources', 'tickers.tx
 let t = [];
 
 data.forEach((ticker, i) => {
-    t.push(ticker);
+    if (ticker.length <= 4 && !(t.includes('-'))) {
+        t.push(ticker);
+    }
 });
 
 const datasourceOptions = {
@@ -44,11 +52,13 @@ const DISCORD_CLIENT = new discord.Client({});
 
 const datasource = new PolygonLiveDataSource(datasourceOptions);
 
-const datastore = new RedisDataStore({
-    host: 'localhost',
-    port: 6379,
-    logger
-});
+// const datastore = new RedisDataStore({
+//     host: 'localhost',
+//     port: 6379,
+//     logger
+// });
+
+const datastore = new MemoryDataStore({ logger });
 
 const diagnostic = new DiscordDiagnosticSystem({
     logger,
@@ -73,7 +83,7 @@ const notification = new DiscordNotification({
 
 
 const serviceOptions = {
-    concurrency: 1,
+    concurrency: 10,
     logger,
     datasource,
     datastore,

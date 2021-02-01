@@ -20,7 +20,8 @@ const logger = winston.createLogger({
     level: "silly",
     format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.simple()
+        winston.format.simple(),
+        winston.format.timestamp()
     )
 });
 

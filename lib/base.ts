@@ -140,7 +140,7 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
         .then(() => this.logger.log(LogLevel.INFO, `${this.constructor.name}#shutdown():SUCCESS`))
         .then(() => {})
         .catch((err) => {
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#shutdown():ERROR - ${err}`);
+            this.logger.log(LogLevel.ERROR, `${this.constructor.name}#shutdown():ERROR - ${err}`);
             // Swallow error intentionally, allow service to close even with an error;
         });
     }

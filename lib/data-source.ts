@@ -76,7 +76,7 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
             });
             return;
         } else {
-            this.logger.log(LogLevel.WARN, color.yellow(`${ticker} is already in the timedout ticker Map.`));
+            this.logger.log(LogLevel.TRACE, color.yellow(`${ticker} is already in the timedout ticker Map.`));
         }
     }
 
@@ -286,7 +286,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
     }
 
     scrapeDatasource(): Promise<TradeEvent[]> {
-        this.logger.log(LogLevel.INFO, `this.processables = ${this.data.length}`);
+        this.logger.log(LogLevel.TRACE, `this.processables = ${this.data.length}`);
         let output = [...this.data];
         this.data = [];
         return Promise.resolve(output);
@@ -308,7 +308,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
                 }
                 break;
             default: 
-                this.logger.log(LogLevel.INFO, `Unknown status type ${data.status}`);
+                this.logger.log(LogLevel.WARN, `Unknown status type ${data.status}`);
                 break;
         }
     }
@@ -336,9 +336,9 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
     }
 
     _tradeHandler = (data: TradeEvent) => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#data.length = ${this.data.length}`);
+        this.logger.log(LogLevel.TRACE, `${this.constructor.name}#data.length = ${this.data.length}`);
         data['ticker'] = data.sym;
-        // this.logger.log(LogLevel.TRACE, `QUOTE: ${JSON.stringify(data)}`)
+        
         if (!(this.timedOutTickers.has(data.sym))) {
             this.data.push(data);
         }

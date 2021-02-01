@@ -105,7 +105,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
 
     fetchWork = (): Promise<BaseStockEvent[]> => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#fetchWork():CALLED`);
+        this.logger.log(LogLevel.TRACE, `${this.constructor.name}#fetchWork():CALLED`);
         return this.datasource.scrapeDatasource()
         .catch((err: Error) => {
             this.logger.log(LogLevel.ERROR, JSON.stringify(err), err)
@@ -121,7 +121,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     */
 
     preProcess = async (): Promise<BaseStockEvent> => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#preProcess():CALLED`)
+        this.logger.log(LogLevel.TRACE, `${this.constructor.name}#preProcess():CALLED`)
         let marketIsOpen = (await this.exchange.isMarketTime());
 
         if (this.isClosed) {
@@ -129,7 +129,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         }
 
         if(!marketIsOpen) {
-            this.logger.log(LogLevel.INFO, 'Market is currently closed. Delaying next try by 5 minutes.')
+            this.logger.log(LogLevel.WARN, 'Market is currently closed. Delaying next try by 5 minutes.')
             return BPromise.delay(5 * 60000).then(() => this.preProcess());
         } // else continue
 
@@ -152,7 +152,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
                 //This filters out tickers that are timed out.
                 const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
                 this.processables = tickers.filter((ticker: BaseStockEvent) => !keys.includes(ticker.ticker));
-                this.logger.log(LogLevel.INFO, `this.processables.length after filter = ${this.processables.length}`)
+                this.logger.log(LogLevel.TRACE, `this.processables.length after filter = ${this.processables.length}`)
 
                 //TODO: The current problem we have here, is that if we have multiple workers, when `this.preProcess()` is called, 
                 // Each worker will then call the Yahoo API again, and refill the `this.processable` Array with all of the same tickers. 
@@ -167,17 +167,17 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
                     //NOTE: This is some edgecase code
                     const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
                     if(this.processables.some((ticker: BaseStockEvent) => !keys.includes(ticker.ticker))) {
-                        this.logger.log(LogLevel.INFO, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
+                        this.logger.log(LogLevel.WARN, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
                         const pendingPromises = Array.from(this.datasource.timedOutTickers.values()).map(p => p.promise);
 
                         return Promise.all(pendingPromises)
                         .then(() => this.preProcess());
                     } else {
-                        this.logger.log(LogLevel.INFO, `this.processables.length = 0, return the backoff promise`);
+                        this.logger.log(LogLevel.TRACE, `this.processables.length = 0, return the backoff promise`);
                         return BPromise.delay(5000).then(() => this.preProcess())
                     }
                 } else {
-                    this.logger.log(LogLevel.INFO, `Nothing in this.processables, instead retrying this.preProcess()`);
+                    this.logger.log(LogLevel.TRACE, `Nothing in this.processables, instead retrying this.preProcess()`);
                     return this.preProcess();
                 }
             })
@@ -210,7 +210,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             this.datasource.timeoutTicker(err.message); //Here, with that particular error, the message will be the TICKER
         } else if (err.name === exception.ServiceClosed.name) {
             //Do nothing
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#exceptionHandler - Received ServiceClosed error from Worker Process.`);
+            this.logger.log(LogLevel.WARN, `${this.constructor.name}#exceptionHandler - Received ServiceClosed error from Worker Process.`);
         } else {
             this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`);
             this.diagnostic.alert({
