@@ -234,17 +234,10 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 const [prevTrade]: TradeEvent[] = data;
                 const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
-
-                const aboveClosePrice = createDeferredPromise();
-                const vwapPromise = getTickerSnapshot(ticker)
-                .then(snapshotData => {
-                    aboveClosePrice.resolve(snapshotData);
-                    return (snapshotData.day.vw > currTrade.p);
-                })
                 this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify
-                if (changePercentPerMinute > 0.05 && timeTaken >= 180) {
+                if (changePercentPerMinute > 0.005 && timeTaken >= 180) {
                     const confidence =  new ConfidenceScore(ticker)
                     const confidenceOptions = confidence.getConfidenceOptions(currTrade, changePercentPerMinute)
 
@@ -252,7 +245,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     return confidence.getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
                         this.logger.log(LogLevel.INFO, `Fetched confidence score for ${ticker} - Got Score: ${confidenceScore}`);
-                        if (confidenceScore >= 75) {
+                        if (confidenceScore >= 30) {
                             this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
