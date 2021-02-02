@@ -10,6 +10,7 @@ import { INotification } from './notification';
 import * as W from './workers';
 import { IDataStore } from './data-store';
 import { IDiagnostic } from './diagnostic';
+import { IMetricProvider } from './metrics';
 
 
 export const StockBotOptionsValidationSchema = joi.object({
@@ -50,6 +51,7 @@ export interface IStockServiceOptions extends IServiceOptions {
     datastore: IDataStore;
     diagnostic: IDiagnostic;
     notification: INotification;
+    metric: IMetricProvider;
     exchange: AlpacasExchange;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
@@ -82,6 +84,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     datasource: IDataSource;
     datastore: IDataStore;
     notification: INotification;
+    metric: IMetricProvider;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -91,6 +94,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.diagnostic = options.diagnostic;
         this.notification = options.notification;
         this.purchaseOptions = options.purchaseOptions;
+        this.metric = options.metric;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
         this.mainWorker = options.mainWorker;
     }
@@ -123,6 +127,13 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     preProcess = async (): Promise<BaseStockEvent> => {
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}#preProcess():CALLED`)
         let marketIsOpen = (await this.exchange.isMarketTime());
+
+        this.metric.push({
+            'processablesByteSize': {
+                value: Buffer.from(this.processables).byteLength,
+                labels: {}
+            }
+        });
 
         if (this.isClosed) {
             return Promise.reject(new exception.ServiceClosed());
@@ -199,7 +210,8 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             exchange: this.exchange,
             notification: this.notification,
             dataSource: this.datasource,
-            dataStore: this.datastore
+            dataStore: this.datastore,
+            metric: this.metric
         });
     }
 

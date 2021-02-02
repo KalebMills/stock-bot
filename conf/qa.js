@@ -4,10 +4,11 @@ const { RedisDataStore, MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
 const discord = require('discord.js');
-const { PhonyExchange } = require('../lib/exchange');
+const { PhonyExchange, AlpacasExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem } = require('../lib/diagnostic');
 const { DiscordNotification } = require('../lib/notification');
 const { LiveDataStockWorker } = require('../lib/workers');
+const { PrometheusMetricRegistry, PrometheusMetricProvider, SUPPORTED_PROMETHEUS_METRIC_TYPES } = require('../lib/metrics');
 const fs = require('fs');
 
 const logger = winston.createLogger({
@@ -69,9 +70,23 @@ const diagnostic = new DiscordDiagnosticSystem({
 });
 
 
-const exchange = new PhonyExchange({
+// const exchange = new PhonyExchange({
+//     logger,
+// });
+
+const exchange = new AlpacasExchange({
+    acceptableGain: {
+        type: 'percent',
+        unit: 1
+    },
+    acceptableLoss: {
+        type: 'percent',
+        unit: 1
+    },
     logger,
-});
+    keyId: process.env['ALPACAS_API_KEY'],
+    secretKey: process.env['ALPACAS_SECRET_KEY']
+})
 
 const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
@@ -79,6 +94,33 @@ const notification = new DiscordNotification({
     token: (process.env['DISCORD_API_KEY'] || ""),
     channelName: 'stock-notifications',
     client: DISCORD_CLIENT
+});
+
+const prometheus_registry = new PrometheusMetricRegistry({
+    logger,
+    defaultLabels: [],
+    metrics: [
+        {
+            name: 'processablesByteSize',
+            metric_name: 'processables_byte_size',
+            description: 'Metric to track the size of the processables array',
+            type: SUPPORTED_PROMETHEUS_METRIC_TYPES.HISTOGRAM.toString(),
+            labels: []
+        },
+        {
+            name: 'tickerProcessTime',
+            metric_name: 'ticker_process_time',
+            description: 'Time taken to process a single ticker',
+            type: SUPPORTED_PROMETHEUS_METRIC_TYPES.HISTOGRAM.toString(),
+            labels: []
+        }
+    ]
+});
+
+const prometheus_metric_provider = new PrometheusMetricProvider({
+    logger,
+    port: 9090,
+    registry: prometheus_registry
 });
 
 
@@ -90,7 +132,8 @@ const serviceOptions = {
     diagnostic,
     exchange,
     mainWorker: LiveDataStockWorker,
-    notification
+    notification,
+    metric: prometheus_metric_provider
 };
 
 

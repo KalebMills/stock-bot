@@ -9,9 +9,10 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
+import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
+import { IMetricProvider } from './metrics';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -20,6 +21,7 @@ export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOpt
     dataStore: IDataStore<T>;
     dataSource: IDataSource<T>;
     notification: INotification;
+    metric: IMetricProvider;
 }
 
 //Required interface to allow generic construction of the StockWorker(s)
@@ -36,12 +38,14 @@ export abstract class StockWorker<T> extends Worker<T> {
     datasource: IDataSource<T>;
     exchange: AlpacasExchange;
     notification: INotification;
+    metric: IMetricProvider;
     constructor(options: IStockeWorkerOptions<T, Alpacas.PlaceOrder, Alpacas.Order>) { //TODO: Needs to be more generically typed
         super(options);
         this.datastore = options.dataStore;
         this.datasource = options.dataSource;
         this.exchange = options.exchange;
         this.notification = options.notification;
+        this.metric = options.metric;
     }
 }
 
@@ -208,6 +212,8 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         
     */
     process(currTrade: TradeEvent): Promise<void> {
+        let timer = new Timer();
+        timer.start();
         this.logger.log(LogLevel.INFO, `${this.constructor.name} processing ${currTrade.ticker}`);
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
         const ticker = currTrade.sym;
@@ -241,7 +247,8 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 .then(snapshotData => {
                     aboveClosePrice.resolve(snapshotData);
                     return (snapshotData.day.vw > currTrade.p);
-                })
+                });
+
                 this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .1% per minute, notify
@@ -293,7 +300,18 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                         } else {
                             this.logger.log(LogLevel.INFO, `Confidence score too low for ${ticker}`);
                         }
-                    });
+                    })
+                    .then(() => {
+                        //Doesn't include the final write to the DB, but that's fine for now
+                        let end = timer.stop();
+
+                        this.metric.push({
+                            'tickerProcessTime': {
+                                value: end,
+                                labels: {}
+                            }
+                        });
+                    })
                 }
             }
         })

@@ -2,6 +2,7 @@ import { LiveDataStockWorker, QuoteEvent, TradeEvent } from '../lib/workers';
 import { AlpacasExchange } from '../lib/exchange';
 import { NotificationOptions, PhonyNotification } from '../lib/notification';
 import { DataSource, PhonyDataSource } from '../lib/data-source';
+import { PhonyMetricProvider } from '../lib/metrics';
 import { PhonyDataStore } from '../lib/data-store';
 import * as util from '../lib/util';
 import * as joi from 'joi';
@@ -24,6 +25,7 @@ let exchange = new AlpacasExchange({
 })
 let notification = new PhonyNotification({ logger });
 let datastore = new PhonyDataStore({ logger });
+let metric = new PhonyMetricProvider({ logger });
 
 // const QUOTE_EVENT: QuoteEvent = {
 //         "ev": "Q",              // Event Type
@@ -88,7 +90,8 @@ describe('#LiveDataStockWorker', () => {
             },
             exceptionHandler: (err) => {},
             _preProcessor: () => Promise.resolve(TRADE_EVENT),
-            dataSource: datasource
+            dataSource: datasource,
+            metric
         });
 
         chai.assert.instanceOf(worker, LiveDataStockWorker);

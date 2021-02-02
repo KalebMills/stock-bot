@@ -23,6 +23,7 @@ const workers_1 = require("../lib/workers");
 const exchange_1 = require("../lib/exchange");
 const notification_1 = require("../lib/notification");
 const data_source_1 = require("../lib/data-source");
+const metrics_1 = require("../lib/metrics");
 const data_store_1 = require("../lib/data-store");
 const util = __importStar(require("../lib/util"));
 const joi = __importStar(require("joi"));
@@ -43,6 +44,7 @@ let exchange = new exchange_1.AlpacasExchange({
 });
 let notification = new notification_1.PhonyNotification({ logger });
 let datastore = new data_store_1.PhonyDataStore({ logger });
+let metric = new metrics_1.PhonyMetricProvider({ logger });
 // const QUOTE_EVENT: QuoteEvent = {
 //         "ev": "Q",              // Event Type
 //         "sym": "MSFT",          // Symbol Ticker
@@ -100,7 +102,8 @@ describe('#LiveDataStockWorker', () => {
             },
             exceptionHandler: (err) => { },
             _preProcessor: () => Promise.resolve(TRADE_EVENT),
-            dataSource: datasource
+            dataSource: datasource,
+            metric
         });
         chai.assert.instanceOf(worker, workers_1.LiveDataStockWorker);
     });
