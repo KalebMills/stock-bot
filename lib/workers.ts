@@ -234,6 +234,14 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 const [prevTrade]: TradeEvent[] = data;
                 const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
+                
+                const aboveClosePrice = createDeferredPromise();	
+                const vwapPromise = getTickerSnapshot(ticker)	
+                .then(snapshotData => {	
+                    aboveClosePrice.resolve(snapshotData);	
+                    return (snapshotData.day.vw > currTrade.p);	
+                })
+                //TODO: add aboveClosePrice to confidenceOptions
                 this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
                 //If the change percent is greater than .5% per minute, notify

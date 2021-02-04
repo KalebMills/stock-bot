@@ -22,22 +22,26 @@ export class ConfidenceScore {
         // TODO: explain the equations
         const relativeVolume: Promise<number> = getRelativeVolume(this.ticker).then((data: number) => data)
         const volRatio = createDeferredPromise()
+        const volRatioScore = createDeferredPromise()
         relativeVolume.then((vol) => {
-            volRatio.resolve(vol)
+            volRatio.resolve(() => vol)
+            volRatioScore.resolve(() => vol)
         })
         confidenceOptions.relativeVolume = {
             process: volRatio.promise.then((vol) => !!(vol>1)),
-            score: volRatio.promise.then((vol) => vol * 15)
+            score: volRatioScore.promise.then((vol) => vol * 15)
         }
         
         const relativeVWAP: Promise<number> = getTickerSnapshot(this.ticker).then((data: Snapshot) => (currTrade.p-data.day.vw)/data.day.vw)
         const VWAPRatio = createDeferredPromise()
+        const VWAPRatioScore = createDeferredPromise()
         relativeVWAP.then((vwap) => {
-            VWAPRatio.resolve(vwap)
+            VWAPRatio.resolve(() => vwap)
+            VWAPRatioScore.resolve(() => vwap)
         })
         confidenceOptions.vwap = {
             process: VWAPRatio.promise.then((increase)=>!!(increase>0)),
-            score: VWAPRatio.promise.then((increase)=> Math.abs(increase)/0.05 * 10)
+            score: VWAPRatioScore.promise.then((increase)=> Math.abs(increase)/0.05 * 10)
         }
 
         confidenceOptions.changePercentPerMinute = {
