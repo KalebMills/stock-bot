@@ -77,9 +77,9 @@ export class ConfidenceScore {
         .then((values: [boolean, number][]) => {
             values.forEach(([signal, value]: [boolean, number]) => {
                 //If the signal is false, add it's value to the values that are false signals
-                summedValues = summedValues + Math.max(value, allocation);
+                summedValues = summedValues + Math.min(value, allocation);
                 if (!signal) {
-                    summedFalseSignalValues = summedFalseSignalValues + Math.max(value, allocation);
+                    summedFalseSignalValues = summedFalseSignalValues + Math.min(value, allocation);
                 }
             });
         })
