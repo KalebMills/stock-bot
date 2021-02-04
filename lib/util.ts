@@ -5,7 +5,7 @@ import { Logger } from './base';
 import { RequestError } from './exceptions';
 import { MarketHoliday, PolygonMarketHolidays } from '../types/polygonMarketHolidays';
 import Axios from 'axios';
-import { Snapshot } from '../types';
+import { PolygonAggregates, Snapshot } from '../types';
 import moment from 'moment';
 
 export interface IDeferredPromise {
@@ -146,50 +146,6 @@ export const getTickerSnapshot = (ticker: string): Promise<Snapshot> => {
     .catch((err: Error) => Promise.reject(new RequestError(err.message)));
 }
 
-
-export interface ConfidenceScoreOptions {
-    [indicatorName: string]: {
-        value: number
-        process: Promise<boolean>
-    };
-}
-
-/**
- * A function that takes in a group of indicators, and based on their value, provides a confidence score based on their signal output
- * @param options An object describing the value of each indicator, and the Promise that will return it's signal
- * @returns A number, which will be between 0-100, which indicates the confidence of the indicators
- */
-
-export const getConfidenceScore = (options: ConfidenceScoreOptions): Promise<number> => {
-    console.log(`getConfidenceScore():INVOKED`);
-    let summedValues: number = 0;
-    let summedFalseSignalValues: number = 0;
-    let processes: Promise<[boolean, number]>[] = [];
-
-    Object.keys(options).forEach((key: string) => {
-        let indicator = options[key];
-        summedValues = summedValues + indicator.value;
-        //Allows us to map the given value of an indicator, to it's process once it has resolved.
-        processes.push(indicator.process.then((val: boolean) => [val, indicator.value]));
-
-    });
-
-    return Promise.all(processes)
-    .then((values: [boolean, number][]) => {
-        values.forEach(([signal, value]: [boolean, number]) => {
-            //If the signal is false, add it's value to the values that are false signals
-            if (!signal) {
-                summedFalseSignalValues = summedFalseSignalValues + value;
-            }
-        });
-    })
-    .then(() => {
-        //Rounded to 2 decimals
-        let calculation = 100 - ((summedFalseSignalValues / summedValues) * 100);
-        return Number(calculation.toFixed(2));
-    });
-}
-
 //TODO: We are making duplicate calls (call to getTickerSnapshot in this class), need to consolidate
 export const isHighVolume = (ticker: string): Promise<boolean> => {
     //TODO: make this configurable via config file/process.env
@@ -209,4 +165,38 @@ export const getCurrentMarketStatus = (): Promise<string> => {
         return data.data.market;
     })
     .catch((err: Error) => Promise.reject(new RequestError(err.message)));
+}
+
+/**
+ * Calculates the relative volume.
+ * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
+ * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
+*/
+export async function getRelativeVolume(ticker: string): Promise<number> {
+    const lastDay: Date = new Date()
+    const yesterday: Date = new Date()
+
+    yesterday.setDate(yesterday.getDate() - 1)
+    lastDay.setDate(await returnLastOpenDay(yesterday))
+
+    const lastDate: string = convertDate(lastDay)
+
+    const minutesPassed: number = minutesSinceOpen()
+
+    return Promise.all([
+        axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
+            params: {
+                apiKey: process.env['ALPACAS_API_KEY'] || "",
+                sort: 'asc',
+                limit: minutesPassed
+            }
+        }), getTickerSnapshot(ticker)
+    ])
+    .then((data) => { 
+        const lastDay: PolygonAggregates = data[0].data
+        const today: Snapshot = data[1]
+        return (lastDay.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.day.v)
+    }).catch(err => {
+        return Promise.reject(new RequestError(`Error in getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
+    })
 }

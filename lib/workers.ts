@@ -9,9 +9,8 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
-import { RequestError } from './exceptions';
-import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
+import { ConfidenceScore } from './confidence-score';
+import { createDeferredPromise, getTickerSnapshot } from './util';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -235,43 +234,26 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 const [prevTrade]: TradeEvent[] = data;
                 const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
                 const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
-
-                const aboveClosePrice = createDeferredPromise();
-                const vwapPromise = getTickerSnapshot(ticker)
-                .then(snapshotData => {
-                    aboveClosePrice.resolve(snapshotData);
-                    return (snapshotData.day.vw > currTrade.p);
+                
+                const aboveClosePrice = createDeferredPromise();	
+                const vwapPromise = getTickerSnapshot(ticker)	
+                .then(snapshotData => {	
+                    aboveClosePrice.resolve(snapshotData);	
+                    return (snapshotData.day.vw > currTrade.p);	
                 })
+                //TODO: add aboveClosePrice to confidenceOptions
                 this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
 
-                //If the change percent is greater than .1% per minute, notify
-                if (changePercentPerMinute > .009 && timeTaken >= 180) {
-
-                    const confidenceOptions: ConfidenceScoreOptions = {
-                        'relativeVolume': {
-                            value: 5,
-                            process: this._getRelativeVolume(ticker).then(relativeVolume => !!(relativeVolume >= 2))
-                        },
-                        'vwap': {
-                            value: 5,
-                            process: vwapPromise
-                        },
-                        'aboveOpenPrice': {     //Note: Probably wouldn't work in pre-market hours
-                            value: 5,
-                            process: aboveClosePrice.promise.then((snapshotData: Snapshot) => !!(currTrade.p > snapshotData.day.o))
-                        },
-                        'totalVolume': {
-                            value: 5,
-                            process: isHighVolume(ticker)
-                        }
-                    }
+                //If the change percent is greater than .5% per minute, notify
+                if (changePercentPerMinute > 0.005 && timeTaken >= 180) {
+                    const confidence =  new ConfidenceScore(ticker)
+                    const confidenceOptions = confidence.getConfidenceOptions(currTrade, changePercentPerMinute)
 
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
-                    //TODO: Would be nice to be able to confidenceOptions displayed in additionalData below to see which indicators are giving positive values
-                    return getConfidenceScore(confidenceOptions)
+                    return confidence.getConfidenceScore(confidenceOptions)
                     .then((confidenceScore: number) => {
                         this.logger.log(LogLevel.INFO, `Fetched confidence score for ${ticker} - Got Score: ${confidenceScore}`);
-                        if (confidenceScore >= 75) {
+                        if (confidenceScore >= 30) {
                             this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
                         
                             return this.notification.notify({
@@ -324,40 +306,4 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
     close(): Promise<void> {
         return super.close();
     }
-
-    /**
-     * Calculates the relative volume.
-     * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
-     * For example the relative volume of a ticker at 10:30AM on a Tuesday would be the ratio of the days volume so far and the total volume from open till 10:30AM on Monday (the last trading day)
-    */
-    async _getRelativeVolume (ticker: string): Promise<number> {
-        const lastDay: Date = new Date()
-        const yesterday: Date = new Date()
-
-        yesterday.setDate(yesterday.getDate() - 1)
-        lastDay.setDate(await returnLastOpenDay(yesterday))
-        
-        const lastDate: string = convertDate(lastDay)
-
-        const minutesPassed: number = minutesSinceOpen()
-
-        return Promise.all([
-            axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${lastDate}/${lastDate}`, {
-                params: {
-                    apiKey: process.env['ALPACAS_API_KEY'] || "",
-                    sort: 'asc',
-                    limit: minutesPassed
-                }
-            }), getTickerSnapshot(ticker)
-        ])
-        .then((data) => { 
-            const lastDayData: PolygonAggregates = data[0].data
-            const today: Snapshot = data[1]
-            return (lastDayData.results.reduce((a:any,b:any) => a + parseInt(b['v']), 0) as number) / (today.day.v)
-        }).catch(err => {
-            return Promise.reject(new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
-        })
-    }
-
-    
 }
