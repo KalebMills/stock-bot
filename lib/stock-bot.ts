@@ -10,14 +10,15 @@ import { INotification } from './notification';
 import * as W from './workers';
 import { IDataStore } from './data-store';
 import { IDiagnostic } from './diagnostic';
-import { IMetricProvider } from './metrics';
 
 
 export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
     datastore: joi.required(), //TODO: Need a better way to type this
     diagnostic: joi.object().required(), //TODO: Need a better way to type this
-    exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
+    exchange: joi.object().required(), //Currently we don't have a base Exchange class 
+    metric: joi.object().required(),
+    // exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
     mainWorker: joi.required(),    //TODO: Need a way to actually type this, though JS makes no differentiation between a function and constructor
     purchaseOptions: joi.object({
@@ -51,7 +52,6 @@ export interface IStockServiceOptions extends IServiceOptions {
     datastore: IDataStore;
     diagnostic: IDiagnostic;
     notification: INotification;
-    metric: IMetricProvider;
     exchange: AlpacasExchange;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
@@ -84,7 +84,6 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     datasource: IDataSource;
     datastore: IDataStore;
     notification: INotification;
-    metric: IMetricProvider;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -94,14 +93,13 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.diagnostic = options.diagnostic;
         this.notification = options.notification;
         this.purchaseOptions = options.purchaseOptions;
-        this.metric = options.metric;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
         this.mainWorker = options.mainWorker;
     }
 
     initialize(): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
-        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize() ])
+        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize() ])
         .then(() => super.initialize())
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
@@ -126,11 +124,10 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
 
     preProcess = async (): Promise<BaseStockEvent> => {
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}#preProcess():CALLED`)
-        let marketIsOpen = (await this.exchange.isMarketTime());
 
         this.metric.push({
             'processablesByteSize': {
-                value: Buffer.from(this.processables).byteLength,
+                value: Buffer.byteLength(this.processables.toString()),
                 labels: {}
             }
         });
@@ -138,11 +135,6 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         if (this.isClosed) {
             return Promise.reject(new exception.ServiceClosed());
         }
-
-        if(!marketIsOpen) {
-            this.logger.log(LogLevel.WARN, 'Market is currently closed. Delaying next try by 5 minutes.')
-            return BPromise.delay(5 * 60000).then(() => this.preProcess());
-        } // else continue
 
         if(this.processables.length > 0) {
             let ticker = this.processables.shift()!;
@@ -224,6 +216,13 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             //Do nothing
             this.logger.log(LogLevel.WARN, `${this.constructor.name}#exceptionHandler - Received ServiceClosed error from Worker Process.`);
         } else {
+            this.metric.push({
+                'processingErrors': {
+                    value: 1,
+                    labels: {}
+                }
+            })
+
             this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`);
             this.diagnostic.alert({
                 level: LogLevel.ERROR,
@@ -237,7 +236,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
     
     close(): Promise<void> {
-        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close() ])
+        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close() ])
         .then(() => super.close());
     }
 }

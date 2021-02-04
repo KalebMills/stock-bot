@@ -10,6 +10,7 @@ import * as D from '../lib/data-source';
 import * as N from '../lib/notification';
 import { PhonyDataStore } from '../lib/data-store';
 import { PhonyDiagnostic } from '../lib/diagnostic';
+import { PhonyMetricProvider } from '../lib/metrics';
 
 const logger: Logger = winston.createLogger({ transports: [ new winston.transports.Console() ] });
 
@@ -33,9 +34,11 @@ class FakeDatasource extends D.DataSource<ITickerChange> {
 
 const datasource = new FakeDatasource(baseOptions);
 const diagnostic = new PhonyDiagnostic();
+const metric = new PhonyMetricProvider({ logger });
 
 const dataStore = new PhonyDataStore({
-    logger
+    logger,
+    metric
 });
 
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests

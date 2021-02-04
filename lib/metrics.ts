@@ -1,7 +1,7 @@
 import { ICloseable, IInitializable, Logger, LogLevel } from "./base";
 import express from 'express';
 import * as http from 'http';
-import * as prom from 'prom-client';
+import prom from 'prom-client';
 import { InvalidConfigurationError } from './exceptions';
 import { createLogger } from "./util";
 
@@ -24,6 +24,7 @@ export interface MetricConfiguration {
     metric_name: string;
     description: string;
     labels?: string[];
+    buckets?: number[]; //Only used for Histogram type
 }
 
 export interface MetricProviderOptions {
@@ -50,14 +51,21 @@ export class PrometheusMetricRegistry implements IInitializable, ICloseable {
     private _metrics: MetricConfiguration[]; //TODO: How can I make this generic?
     private _registeredMetrics: Map<string, PrometheusMetric>; 
     private _registry: prom.Registry;
+    private logger: Logger;
 
     constructor (options: PrometheusMetricRegistryOptions) {
+        this.logger = options.logger;
         this._metrics = options.metrics;
-        this._registry = new prom.Registry();
+        this._registry = prom.register;
         this._registeredMetrics = new Map();
+
+        prom.collectDefaultMetrics({
+            register: this._registry
+        });
 
         //Register our metrics
         this._metrics.forEach(metricOptions => {
+            this.logger.log(LogLevel.INFO, `Registering ${metricOptions.name} -- ${JSON.stringify(metricOptions)}`)
             this.registerMetric(metricOptions);
         });
     }
@@ -131,6 +139,7 @@ export class PrometheusMetricProvider implements IMetricProvider {
             if (!metricOptions.hasOwnProperty('labels')) {
                 metricOptions.labels = {};
             }
+            console.log(`Has Metric: ${!!metric} -- What is it? ${metric.constructor.name}`)
             metric.push(metricOptions);
         });
     }
@@ -187,10 +196,18 @@ export class PrometheusGaugeMetric implements PrometheusMetric {
     push(options: {value: number, labels: { [labelName: string]: string }}): void {
         const { value, labels } = options;
         if (value) {
-            if (labels && isRegisteredLabels(labels, this.labels)) {
-                this.gauge.labels(...Object.values(labels)).inc(value);
+            if (value > 1) {
+                if (labels && isRegisteredLabels(labels, this.labels)) {
+                    this.gauge.labels(...Object.values(labels)).set(value);
+                } else {
+                    this.gauge.set(value);
+                }
             } else {
-                this.gauge.inc(value);
+                if (labels && isRegisteredLabels(labels, this.labels)) {
+                    this.gauge.labels(...Object.values(labels)).inc(value);
+                } else {
+                    this.gauge.inc(value);
+                }
             }
         } else {
             if (labels) {
@@ -208,11 +225,24 @@ export class PrometheusHistogramMetric implements PrometheusMetric {
 
     constructor (options: MetricConfiguration, registry: prom.Registry) {
         this.labels = options.labels || [];
+        let buckets: number[] = options.buckets || [];
+
+        //TODO: This should be configurable
+        if (!options.buckets) {
+            for (let i = 0; i<= 100; i++) {
+                if (i % 5 == 0) {
+                    buckets.push(i / 100);
+                }
+            }
+        }
+
+
         this.histogram = new prom.Histogram({
             name: options.metric_name,
             help: options.description,
             registers: [registry],
-            labelNames: options.labels || []
+            labelNames: options.labels || [],
+            buckets
         });
     }
 
@@ -255,7 +285,9 @@ export class PrometheusMetricService {
 
         this.app.get('/metrics', (req, res, next) => {
             return this.registry.getPrometheusRegistry().metrics()
-            .then(data => res.status(200).json(data));
+            .then(data => {
+                res.status(200).contentType(this.registry.getPrometheusRegistry().contentType).send(data);
+            });
         });
     }
 

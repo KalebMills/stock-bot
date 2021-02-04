@@ -10,6 +10,8 @@ import * as chai from 'chai';
 
 let logger = util.createLogger({});
 
+let metric = new PhonyMetricProvider({ logger });
+
 let exchange = new AlpacasExchange({
     logger,
     acceptableGain: {
@@ -24,8 +26,7 @@ let exchange = new AlpacasExchange({
     secretKey: (process.env['ALPACAS_SECRET_KEY'] || "")
 })
 let notification = new PhonyNotification({ logger });
-let datastore = new PhonyDataStore({ logger });
-let metric = new PhonyMetricProvider({ logger });
+let datastore = new PhonyDataStore({ logger, metric });
 
 // const QUOTE_EVENT: QuoteEvent = {
 //         "ev": "Q",              // Event Type
@@ -129,6 +130,38 @@ describe('#LiveDataStockWorker', () => {
     //         });
     //     });
     // });
+
+    it('Can properly calculate _getChangePercentPerMinute', () => {
+        let currentTrade: TradeEvent = {
+            p: 104.14,
+            c: [],
+            ev: '',
+            i: '',
+            s: 0,
+            sym: 'TEST',
+            t: new Date().getTime(),
+            ticker: 'TEST',
+            x: 0,
+            z: 0
+        }
+
+        let previousTrade: TradeEvent = {
+            p: 104.13,
+            c: [],
+            ev: '',
+            i: '',
+            s: 0,
+            sym: 'TEST',
+            t: new Date().getTime() - (180 * 1000),
+            ticker: 'TEST',
+            x: 0,
+            z: 0
+        }
+
+        let output = worker._getChangePercentPerMinute(currentTrade, previousTrade);
+
+        chai.assert.equal(output, 0.003200819409768901);
+    });
 
 
     it('Can close', () => {
