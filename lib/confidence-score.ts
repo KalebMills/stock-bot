@@ -20,6 +20,7 @@ export class ConfidenceScore {
 
         // for the following equations the denominator is the interval and the multiplier is the weight. Need a more elegant way of configuring this
         // TODO: explain the equations
+
         const relativeVolume: Promise<number> = getRelativeVolume(this.ticker).then((data: number) => data)
         const volRatio = createDeferredPromise()
         const volRatioScore = createDeferredPromise()
@@ -65,6 +66,7 @@ export class ConfidenceScore {
         let summedFalseSignalValues: number = 0;
         let processes: Promise<[boolean, number]>[] = [];
 
+        const allocation: number = Object.keys(ConfidenceScoreOptions).length
         Object.keys(ConfidenceScoreOptions).forEach((key: string) => {
             let indicator = ConfidenceScoreOptions[key];
             //Allows us to map the given value of an indicator, to it's process once it has resolved.
@@ -75,9 +77,9 @@ export class ConfidenceScore {
         .then((values: [boolean, number][]) => {
             values.forEach(([signal, value]: [boolean, number]) => {
                 //If the signal is false, add it's value to the values that are false signals
-                summedValues = summedValues + value;
+                summedValues = summedValues + Math.max(value, allocation);
                 if (!signal) {
-                    summedFalseSignalValues = summedFalseSignalValues + value;
+                    summedFalseSignalValues = summedFalseSignalValues + Math.max(value, allocation);
                 }
             });
         })
