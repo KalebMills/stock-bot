@@ -171,7 +171,7 @@ const notification = new DiscordNotification({
 });
 
 const serviceOptions = {
-    concurrency: 10,
+    concurrency: 50,
     logger,
     datasource,
     datastore,

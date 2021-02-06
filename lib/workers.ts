@@ -210,6 +210,14 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         
     */
     process(currTrade: TradeEvent): Promise<void> {
+        //Track # of processed tickers
+        this.metric.push({
+            'processedTickers': {
+                value: 1,
+                labels: {}
+            }
+        });
+
         this.logger.log(LogLevel.INFO, `${this.constructor.name} processing ${currTrade.ticker}`);
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
         const ticker = currTrade.sym;
@@ -244,14 +252,6 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     return returnPromise;
                 }
 
-                //Track # of processed tickers
-                this.metric.push({
-                    'processedTickers': {
-                        value: 1,
-                        labels: {}
-                    }
-                });
-
                 const currTradeSeconds = new Decimal(currTrade.t).dividedBy(1000);
                 const prevTradeSeconds = new Decimal(prevTrade.t).dividedBy(1000);
                 const timeTaken = currTradeSeconds.minus(prevTradeSeconds);
@@ -268,10 +268,10 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     return Promise.reject(new exception.InvalidDataError(`${ticker} has a bad calculation. Current Price ${currTrade.p} -- Previous Price: ${prevTrade.p}`));
                 }
 
-                this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
+                this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute.toNumber()} per minute. Time Taken Between Samples: ${timeTaken} seconds`);
 
                 //If the change percent is greater than .1% per minute, notify
-                if (changePercentPerMinute.greaterThanOrEqualTo('0.0005') && timeTaken.greaterThanOrEqualTo(180)) {
+                if (changePercentPerMinute.greaterThanOrEqualTo(0.0005) && timeTaken.greaterThanOrEqualTo(180)) {
 
                     this.metric.push({
                         'minRequirementTicker': {
