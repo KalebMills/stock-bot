@@ -276,7 +276,9 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     this.metric.push({
                         'minRequirementTicker': {
                             value: 1,
-                            labels: {}
+                            labels: {
+                                'ticker': ticker
+                            }
                         }
                     });
 

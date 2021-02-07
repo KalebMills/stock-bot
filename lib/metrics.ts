@@ -56,7 +56,7 @@ export class PrometheusMetricRegistry implements IInitializable, ICloseable {
     constructor (options: PrometheusMetricRegistryOptions) {
         this.logger = options.logger;
         this._metrics = options.metrics;
-        this._registry = prom.register;
+        this._registry = new prom.Registry();
         this._registeredMetrics = new Map();
 
         prom.collectDefaultMetrics({
@@ -139,7 +139,7 @@ export class PrometheusMetricProvider implements IMetricProvider {
             if (!metricOptions.hasOwnProperty('labels')) {
                 metricOptions.labels = {};
             }
-            console.log(`Has Metric: ${!!metric} -- What is it? ${metric.constructor.name}`)
+            
             metric.push(metricOptions);
         });
     }
@@ -288,6 +288,10 @@ export class PrometheusMetricService {
             .then(data => {
                 res.status(200).contentType(this.registry.getPrometheusRegistry().contentType).send(data);
             });
+        });
+
+        this.app.get('/health', (req, res, next) => {
+            res.status(200).json({ status: 'OK' });
         });
     }
 

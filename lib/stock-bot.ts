@@ -219,7 +219,9 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             this.metric.push({
                 'processingErrors': {
                     value: 1,
-                    labels: {}
+                    labels: {
+                        'errorType' : err.constructor.name 
+                    }
                 }
             })
 

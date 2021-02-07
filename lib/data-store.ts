@@ -130,7 +130,6 @@ export class MemoryDataStore implements IDataStore {
         try {
             this.store[key] = JSON.stringify(data);
             this.logger.log(LogLevel.TRACE, `${key} was saved into ${this.constructor.name}. Store now has ${Object.keys(this.store).length} entries in it`)
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#store.length = ${Object.keys(this.store).length}`)
             this.metric.push({
                 'memoryStoreKeys': {
                     value: Object.keys(this.store).length,

@@ -59,6 +59,7 @@ const serviceOptions: IStockServiceOptions = {
     //@ts-ignore Right now it expects an instanceof AlpacasExchange
     exchange,
     notification,
+    metric,
     diagnostic,
     //@ts-ignore
     mainWorker: TopGainerNotificationStockWorker,

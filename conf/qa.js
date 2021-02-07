@@ -60,7 +60,7 @@ const prometheus_registry = new PrometheusMetricRegistry({
             metric_name: 'min_requirement_ticker_count',
             description: 'A metric to track the number of tickers that pass the basic requirement',
             type: SUPPORTED_PROMETHEUS_METRIC_TYPES.COUNTER,
-            labels: []
+            labels: ['ticker']
         }, {
             name: 'confidentTicker',
             metric_name: 'confident_ticker_count',
@@ -78,7 +78,7 @@ const prometheus_registry = new PrometheusMetricRegistry({
             metric_name: 'processing_error_count',
             description: 'A metric to track the number of errors occurring during processing',
             type: SUPPORTED_PROMETHEUS_METRIC_TYPES.COUNTER,
-            labels: []
+            labels: ['errorType']
         }, {
             name: 'memoryStoreKeys',
             metric_name: 'memory_store_keys_count',
