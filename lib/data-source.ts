@@ -449,7 +449,7 @@ export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T
         let filteredForTickerLength = words.filter(word => word.length <= 5); //5 because here it may be something like $AAPL
 
         filteredForTickerLength.forEach((word: string) => {
-            let cleanWord: string = word.toUpperCase().replace(/[^\w\s]/gi, '');
+            let cleanWord: string = word.toUpperCase().replace('\n', '').replace(/[^\w\s]/gi, '');
             let isTicker: boolean = this.tickerList.includes(cleanWord);
 
             if (isTicker) {
