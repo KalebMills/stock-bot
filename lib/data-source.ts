@@ -274,6 +274,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
         }
 
         return this.initializePromise.promise
+        .then(() => super.initialize())
         .then(() => {
             //Handle all incoming quotes
             //TODO: May want to refactor this, but the idea is we don't want to handle incoming quotes until our promise is resolved
@@ -365,7 +366,8 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
             return this.closePromise.promise
             .then(() => {
                 this.polygonConn.close();
-            });
+            })
+            .then(() => super.close())
         }
     }
 }

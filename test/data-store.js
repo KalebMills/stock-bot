@@ -28,11 +28,13 @@ const chai = __importStar(require("chai"));
 const exceptions_1 = require("../lib/exceptions");
 const uuid = __importStar(require("uuid"));
 const winston_1 = __importDefault(require("winston"));
+const metrics_1 = require("../lib/metrics");
 const CONSTRUCT_DOCKER_REDIS = () => util_1.runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
 const DESTORY_DOCKER_REDIS = () => util_1.runCmd('docker rm -f TEST_REDIS_DB');
 const logger = winston_1.default.createLogger({
     transports: [new winston_1.default.transports.Console()]
 });
+const metric = new metrics_1.PhonyMetricProvider({ logger });
 describe('#MemoryDataStore', () => {
     const TEST_KEY = 'TEST_KEY';
     const TEST_DATA = {
@@ -41,7 +43,8 @@ describe('#MemoryDataStore', () => {
     let store;
     it('Can construct MemoryDataStore', () => {
         store = new data_store_1.MemoryDataStore({
-            logger
+            logger,
+            metric
         });
         chai.assert.instanceOf(store, data_store_1.MemoryDataStore);
     });
@@ -82,6 +85,25 @@ describe('#MemoryDataStore', () => {
     it('Can close MemoryDataStore', () => {
         return store.close();
     });
+    it('Will overwrite data in the store if the key is already present', () => {
+        let dataStore = new data_store_1.MemoryDataStore({ logger, metric });
+        return dataStore.initialize()
+            .then(() => {
+            let promises = [];
+            for (let i = 0; i <= 1000; i++) {
+                promises.push(dataStore.save('TEST', {}));
+            }
+            return Promise.all(promises);
+        })
+            .then(() => dataStore.get('*')) //Get all of the keys
+            .then((keys) => {
+            console.log(JSON.stringify(keys), keys.length);
+            return keys.length;
+        })
+            .then(count => {
+            chai.assert.equal(count, 1);
+        });
+    });
 });
 describe('#RedisDataStore', () => {
     let store;
@@ -104,7 +126,8 @@ describe('#RedisDataStore', () => {
             host: 'localhost',
             logger: winston_1.default.createLogger({
                 transports: [new winston_1.default.transports.Console()]
-            })
+            }),
+            metric
         });
         chai.assert.instanceOf(store, data_store_1.RedisDataStore);
     });

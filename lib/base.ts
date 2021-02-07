@@ -1,6 +1,8 @@
 import BPromise from 'bluebird';
 import * as uuid from 'uuid';
 import * as winston from 'winston';
+import { IMetricProvider } from './metrics';
+import { Timer } from './util';
 
 export type Logger = winston.Logger;
 
@@ -48,6 +50,7 @@ export interface IServiceOptions<T = any> {
     concurrency: number;
     workerOptions: IWorkerOptions<T>;
     logger: Logger;
+    metric: IMetricProvider;
 }
 
 export interface IWorkerOptions<TInput = any> {
@@ -55,6 +58,7 @@ export interface IWorkerOptions<TInput = any> {
     _preProcessor: () => Promise<TInput>;
     exceptionHandler(err: Error): void;
     logger: Logger;
+    metric: IMetricProvider;
 }
 
 export interface IWorker<TInput, TOutput = any> extends IInitializable, ICloseable {
@@ -87,9 +91,11 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     workerOptions: IWorkerOptions<POutput>;
     logger: Logger;
     isClosed: boolean;
+    metric: IMetricProvider;
     constructor(options: IServiceOptions) {
         this.concurrency = options.concurrency;
         this.workers = new Map();
+        this.metric = options.metric;
         //@ts-ignore
         this.workerOptions = options.workerOptions; //TODO: fix this type error; makeWorkerOptions should have it's own interface
         this.logger = options.logger;
@@ -103,6 +109,7 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
                 const workerId: string = uuid.v4().substr(0, 8);
                 const worker = this.makeWorker({
                     ...this.workerOptions,
+                    metric: this.metric,
                     id: workerId,
                     logger: this.logger,
                     _preProcessor: this.preProcess
@@ -150,6 +157,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
     isRunning: boolean;
     isClosed: boolean;
     logger: Logger;
+    metric: IMetricProvider;
     id: string;
     _preProcessor: () => Promise<TInput>;
     _exceptionHandler: (err: Error) => void;
@@ -159,6 +167,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
         this.isRunning = false;
         this.isClosed = false;
         this.id = options.id;
+        this.metric = options.metric;
         this.logger = options.logger;
         this._preProcessor = options._preProcessor;
         this._exceptionHandler = options.exceptionHandler;
@@ -182,7 +191,8 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
 
     run(): void {
         if(this.isRunning && !this._pendingProcess && !this.isClosed) {
-            
+            let timer = new Timer();
+            timer.start();
             //TODO: this._preProcessor should not be called here, instead this._preProcessor should mostly likely be removed.
             this._pendingProcess = this._preProcessor().then((args) => this.process(args))
 
@@ -195,7 +205,16 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
                 this._exceptionHandler(err);
             })
             //Don't care if it fails, rerun;
-            .finally(() => this.run());
+            .finally(() => {
+                let end = timer.stop();
+                this.metric.push({
+                    'tickerProcessTime': {
+                        value: end,
+                        labels: {}
+                    }
+                });
+                this.run()
+            });
         }
     }
 
