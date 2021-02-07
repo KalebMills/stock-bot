@@ -1,4 +1,4 @@
-import { ITickerChange, IStockChange } from './stock-bot';
+import { ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import * as joi from 'joi';
 import * as U from './util';
 import axios, { AxiosResponse } from 'axios';
@@ -21,22 +21,27 @@ export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInit
     validateData(input: any): boolean;
     scrapeDatasource(): Promise<TOutput[]>;
     timeoutTicker(ticker: string, timeout?: number): void;
+    isMock: boolean;
 }
 
 export interface IDataSourceOptions {
     validationSchema: joi.Schema;
     logger: Logger;
+    isMock?: boolean;
 }
 
 export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     readonly validationSchema: joi.Schema;
     logger: Logger;
     timedOutTickers: Map<string, U.IDeferredPromise>;
+    isMock: boolean; //TODO: Implement the usage of this flag in the other DataSource super classes
 
     constructor(options: IDataSourceOptions) {
         this.validationSchema = options.validationSchema;
         this.logger = options.logger;
         this.timedOutTickers = new Map();
+        this.isMock = options.isMock ? options.isMock : false;
+
     }
 
     initialize(): Promise<void> {
@@ -380,15 +385,14 @@ export interface TwitterDataSourceOptions extends IDataSourceOptions {
     isMock?: boolean;
 }
 
-export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T> {
+export class TwitterDataSource extends DataSource<BaseStockEvent> implements IDataSource<BaseStockEvent> {
     private client!: twit;
     private clientStream!: twit.Stream;
     private twitterIds: string[];
-    private work: string[];
+    private work: BaseStockEvent[];
     private tickerList: string[];
     private twitterKey: string;
     private twitterSecret: string;
-    private isMock: boolean; //TODO: Probably should add this as part of the IDataSource interface so all datasources have the ability to be mocked out
 
 
     constructor (options: TwitterDataSourceOptions) {
@@ -398,7 +402,6 @@ export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T
         this.twitterKey = options.twitterKey;
         this.twitterSecret = options.twitterSecret;
         this.work = [];
-        this.isMock = options.isMock ? options.isMock : false;
     }
 
     initialize(): Promise<void> {
@@ -414,7 +417,7 @@ export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T
                 let output = this._processTweet(tweet);
     
                 if (output) {
-                    this.work.push(output);
+                    this.work.push({ ticker: output });
                 }
             });
         }
@@ -423,7 +426,9 @@ export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T
     }
 
     /**
-     * Currently we only support 2 ways of finding a ticker, check if a word with $ at the beginning of it is a ticker
+     * Currently we only support 2 ways of finding a ticker,
+     * 1. check if a word with $ at the beginning of it is a ticker
+     * 2. If we can match a word that is 4 characters long to a ticker in this.tickerList
      * 
      * @param tweet The tweet to process
      * @returns {string | void} the ticker in the tweet, or nothing if the tweet does not contain a ticker
@@ -431,13 +436,11 @@ export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T
 
     
     _processTweet(tweet: string): string | void {
-        //Somehow, try to find a ticker in the tweet
-
         const splitTweet: string[] = tweet.replace('\n', '').split(" ");
 
-        const ticker = splitTweet.filter(word => word.startsWith("$")); //TODO: This assumes anything that starts with $ is a ticker.. maybe validate against the ticker list
+        const ticker = splitTweet.filter(word => word.startsWith("$"));
         
-        const hasTicker: boolean = ticker.length > 0;
+        const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].toUpperCase());
 
         if (hasTicker) {
             return ticker[0].replace("$", '');
@@ -465,8 +468,11 @@ export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T
         }
     }
 
-    scrapeDatasource(): Promise<T[]> {
-        return Promise.resolve([]);
+    scrapeDatasource(): Promise<BaseStockEvent[]> {
+        return Promise.resolve(this.work)
+        .finally(() => {
+            this.work = [];
+        });
     }
 
     close(): Promise<void> {

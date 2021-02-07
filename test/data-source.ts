@@ -60,7 +60,7 @@ describe('#DataSource abstract class', () => {
 });
 
 describe('#TwitterDataSource', () => {
-    let twitterDataSource: D.TwitterDataSource<string>;
+    let twitterDataSource: D.TwitterDataSource;
 
     it('Can construct an instance of TwitterDataSource', () => {
         twitterDataSource = new D.TwitterDataSource({
