@@ -143,7 +143,6 @@ describe('#PrometheusMetricProvider', () => {
         }
         return axios_1.default.get(`http://localhost:10000/metrics`)
             .then(data => {
-            console.log(data.data);
             chai.assert.equal(data.data.includes('test_metric 1000'), true);
         });
     });
