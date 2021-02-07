@@ -4,13 +4,16 @@ import * as chai from 'chai';
 import { DefaultError, isErrorType, NotFoundError } from '../lib/exceptions';
 import * as uuid from 'uuid';
 import winston from 'winston';
+import { PhonyMetricProvider } from '../lib/metrics';
 
 const CONSTRUCT_DOCKER_REDIS = () => runCmd('docker run -d --name TEST_REDIS_DB -p 6379:6379 redis:alpine');
 const DESTORY_DOCKER_REDIS = () => runCmd('docker rm -f TEST_REDIS_DB');
 
 const logger = winston.createLogger({
     transports: [ new winston.transports.Console() ]
-})
+});
+
+const metric = new PhonyMetricProvider({ logger });
 
 
 describe('#MemoryDataStore', () => {
@@ -22,7 +25,8 @@ describe('#MemoryDataStore', () => {
     
     it('Can construct MemoryDataStore', () => {
         store = new MemoryDataStore({
-            logger
+            logger,
+            metric
         });
         chai.assert.instanceOf(store, MemoryDataStore);
     });
@@ -70,6 +74,28 @@ describe('#MemoryDataStore', () => {
     it('Can close MemoryDataStore', () => {
         return store.close();
     });
+
+    it('Will overwrite data in the store if the key is already present', () => {
+        let dataStore = new MemoryDataStore({ logger, metric });
+
+        return dataStore.initialize()
+        .then(() => {
+            let promises: Promise<any>[] = [];
+            for (let i = 0; i <= 1000; i++) {
+                promises.push(dataStore.save('TEST', {}));
+            }
+            return Promise.all(promises);
+        })
+        .then(() => dataStore.get('*')) //Get all of the keys
+        .then((keys) => {
+            console.log(JSON.stringify(keys), keys.length);
+            return keys.length;
+        })
+        .then(count => {
+            chai.assert.equal(count, 1);
+        });
+
+    })
 });
 
 describe('#RedisDataStore', () => {
@@ -96,7 +122,8 @@ describe('#RedisDataStore', () => {
             host: 'localhost',
             logger: winston.createLogger({
                 transports: [ new winston.transports.Console() ]
-            })
+            }),
+            metric
         });
 
         chai.assert.instanceOf(store, RedisDataStore);

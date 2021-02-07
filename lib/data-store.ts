@@ -2,6 +2,7 @@ import redis from 'ioredis';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import { NotFoundError, UnprocessableEvent } from './exceptions';
 import color from 'chalk'
+import { IMetricProvider } from './metrics';
 
 //TODO: Perhaps find a more robust way to truly type this rather than using `any`
 export type BaseDataStoreObject = { [key: string]: BaseDataStoreObject | any };
@@ -11,6 +12,7 @@ export interface DataStoreObject<T = any> {
 }
 
 export interface BaseDataStoreOptions {
+    metric: IMetricProvider;
     logger: Logger;
 }
 
@@ -31,11 +33,13 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
     private client: redis.Redis;
     private logger: Logger;
     private readonly port: number;
+    private metric: IMetricProvider;
     
     constructor(public options: RedisDataStoreOptions) {
         this.port = options.port || 6379;
         this.client = new redis(this.port, options.host, options.options || { lazyConnect: true });
         this.logger = options.logger;
+        this.metric = options.metric;
     }
 
     initialize(): Promise<void> {
@@ -107,8 +111,10 @@ export class RedisDataStore<TInput, TOutput> implements IDataStore<TInput, TOutp
 export class MemoryDataStore implements IDataStore {
     private store: DataStoreObject;
     private logger: Logger;
+    private metric: IMetricProvider;
 
     constructor(options: BaseDataStoreOptions) {
+        this.metric = options.metric;
         this.store = {};
         this.logger = options.logger;
     }
@@ -124,6 +130,17 @@ export class MemoryDataStore implements IDataStore {
         try {
             this.store[key] = JSON.stringify(data);
             this.logger.log(LogLevel.TRACE, `${key} was saved into ${this.constructor.name}. Store now has ${Object.keys(this.store).length} entries in it`)
+            this.metric.push({
+                'memoryStoreKeys': {
+                    value: Object.keys(this.store).length,
+                    labels: {}
+                },
+                'memoryStoreSize': {
+                    value: Buffer.from(JSON.stringify(this.store)).byteLength,
+                    labels: {}
+                }
+            });
+
             return Promise.resolve(data);
         } catch (e) {
             return Promise.reject(e);

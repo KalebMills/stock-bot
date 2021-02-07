@@ -2,12 +2,15 @@ import { LiveDataStockWorker, QuoteEvent, TradeEvent } from '../lib/workers';
 import { AlpacasExchange } from '../lib/exchange';
 import { NotificationOptions, PhonyNotification } from '../lib/notification';
 import { DataSource, PhonyDataSource } from '../lib/data-source';
+import { PhonyMetricProvider } from '../lib/metrics';
 import { PhonyDataStore } from '../lib/data-store';
 import * as util from '../lib/util';
 import * as joi from 'joi';
 import * as chai from 'chai';
 
 let logger = util.createLogger({});
+
+let metric = new PhonyMetricProvider({ logger });
 
 let exchange = new AlpacasExchange({
     logger,
@@ -23,7 +26,7 @@ let exchange = new AlpacasExchange({
     secretKey: (process.env['ALPACAS_SECRET_KEY'] || "")
 })
 let notification = new PhonyNotification({ logger });
-let datastore = new PhonyDataStore({ logger });
+let datastore = new PhonyDataStore({ logger, metric });
 
 // const QUOTE_EVENT: QuoteEvent = {
 //         "ev": "Q",              // Event Type
@@ -88,7 +91,8 @@ describe('#LiveDataStockWorker', () => {
             },
             exceptionHandler: (err) => {},
             _preProcessor: () => Promise.resolve(TRADE_EVENT),
-            dataSource: datasource
+            dataSource: datasource,
+            metric
         });
 
         chai.assert.instanceOf(worker, LiveDataStockWorker);
@@ -126,6 +130,38 @@ describe('#LiveDataStockWorker', () => {
     //         });
     //     });
     // });
+
+    it('Can properly calculate _getChangePercentPerMinute', () => {
+        let currentTrade: TradeEvent = {
+            p: 104.14,
+            c: [],
+            ev: '',
+            i: '',
+            s: 0,
+            sym: 'TEST',
+            t: new Date().getTime(),
+            ticker: 'TEST',
+            x: 0,
+            z: 0
+        }
+
+        let previousTrade: TradeEvent = {
+            p: 104.13,
+            c: [],
+            ev: '',
+            i: '',
+            s: 0,
+            sym: 'TEST',
+            t: new Date().getTime() - (180 * 1000),
+            ticker: 'TEST',
+            x: 0,
+            z: 0
+        }
+
+        let output = worker._getChangePercentPerMinute(currentTrade, previousTrade);
+
+        chai.assert.equal(output, 0.003200819409768901);
+    });
 
 
     it('Can close', () => {

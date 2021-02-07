@@ -64,6 +64,15 @@ export class InvalidDataError extends Error {
     }
 }
 
+export class InvalidConfigurationError extends Error {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, InvalidConfigurationError.prototype);
+        this.message = message || '';
+        this.name = this.constructor.name;
+    }
+}
+
 /**
  * When an axios GET request fails.
  */

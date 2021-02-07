@@ -9,9 +9,10 @@ import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource } from './data-source';
-import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay } from './util';
+import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
+import { Decimal } from 'decimal.js';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -42,6 +43,7 @@ export abstract class StockWorker<T> extends Worker<T> {
         this.datasource = options.dataSource;
         this.exchange = options.exchange;
         this.notification = options.notification;
+        this.metric = options.metric;
     }
 }
 
@@ -208,6 +210,14 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         
     */
     process(currTrade: TradeEvent): Promise<void> {
+        //Track # of processed tickers
+        this.metric.push({
+            'processedTickers': {
+                value: 1,
+                labels: {}
+            }
+        });
+
         this.logger.log(LogLevel.INFO, `${this.constructor.name} processing ${currTrade.ticker}`);
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}:process(${JSON.stringify(currTrade)})`);
         const ticker = currTrade.sym;
@@ -221,9 +231,11 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         })
         .then(([isOpen, data]: [boolean, TradeEvent[]]) => {
 
+            let returnPromise = Promise.resolve();
+
             if (!isOpen) {
                 this.logger.log(LogLevel.TRACE, `Market currently close, disregarding.`);
-                return;
+                return returnPromise;
             }
 
             if (!(data.length === 1)) {
@@ -232,20 +244,43 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                 return Promise.resolve();
             } else {
                 this.logger.log(LogLevel.TRACE, `PrevTrade: ${JSON.stringify(data)}`)
-                const [prevTrade]: TradeEvent[] = data;
-                const timeTaken = ((currTrade.t / 1000) - (prevTrade.t / 1000));
-                const changePercentPerMinute: number = this._getChangePercentPerMinute(currTrade, prevTrade);
+                const [ prevTrade ]: TradeEvent[] = data;
+
+
+                if (new Decimal(currTrade.p).lessThanOrEqualTo(prevTrade.p)) {
+                    this.logger.log(LogLevel.INFO, `Skipping ${ticker} for processing, it is at a loss currently.`);
+                    return returnPromise;
+                }
+
+                const currTradeSeconds = new Decimal(currTrade.t).dividedBy(1000);
+                const prevTradeSeconds = new Decimal(prevTrade.t).dividedBy(1000);
+                const timeTaken = currTradeSeconds.minus(prevTradeSeconds);
+                const changePercentPerMinute: Decimal = new Decimal(this._getChangePercentPerMinute(currTrade, prevTrade));
 
                 const aboveClosePrice = createDeferredPromise();
                 const vwapPromise = getTickerSnapshot(ticker)
                 .then(snapshotData => {
                     aboveClosePrice.resolve(snapshotData);
                     return (snapshotData.day.vw > currTrade.p);
-                })
-                this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute} per minute.`);
+                });
+
+                if (isNaN(changePercentPerMinute.toNumber())) {
+                    return Promise.reject(new exception.InvalidDataError(`${ticker} has a bad calculation. Current Price ${currTrade.p} -- Previous Price: ${prevTrade.p}`));
+                }
+
+                this.logger.log(LogLevel.INFO, `${ticker} has changed ${changePercentPerMinute.toNumber()} per minute. Time Taken Between Samples: ${timeTaken} seconds`);
 
                 //If the change percent is greater than .1% per minute, notify
-                if (changePercentPerMinute > .009 && timeTaken >= 180) {
+                if (changePercentPerMinute.greaterThanOrEqualTo(0.0005) && timeTaken.greaterThanOrEqualTo(180)) {
+
+                    this.metric.push({
+                        'minRequirementTicker': {
+                            value: 1,
+                            labels: {
+                                'ticker': ticker
+                            }
+                        }
+                    });
 
                     const confidenceOptions: ConfidenceScoreOptions = {
                         'relativeVolume': {
@@ -268,11 +303,27 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
                     //Calculating this here so we don't make this calculation for every ticker, this should only be run for potential tickers
                     //TODO: Would be nice to be able to confidenceOptions displayed in additionalData below to see which indicators are giving positive values
-                    return getConfidenceScore(confidenceOptions)
+                    returnPromise
+                    .then(() => getConfidenceScore(confidenceOptions))
                     .then((confidenceScore: number) => {
                         this.logger.log(LogLevel.INFO, `Fetched confidence score for ${ticker} - Got Score: ${confidenceScore}`);
-                        if (confidenceScore >= 75) {
-                            this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`)
+
+                        this.metric.push({
+                            'confidenceScore': {
+                                value: confidenceScore / 100,
+                                labels: {}
+                            }
+                        });
+
+                        if (confidenceScore >= 49) {
+                            this.logger.log(LogLevel.INFO, `${ticker} has the required increase and confidence to notify in Discord`);
+
+                            this.metric.push({
+                                'confidentTicker': {
+                                    value: 1,
+                                    labels: {}
+                                }
+                            });
                         
                             return this.notification.notify({
                                 ticker: ticker,
@@ -296,6 +347,8 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                     });
                 }
             }
+
+            return returnPromise;
         })
         .then(() => {
             this.logger.log(LogLevel.TRACE, `Completed process()`);
@@ -309,16 +362,26 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
      * @param timeInSeconds The time (in seconds) of the time taken between the two compared values
      */
 
-    private _getChangePercentPerMinute (currTrade: TradeEvent, prevTrade: TradeEvent): number {
-        this.logger.log(LogLevel.TRACE, `currQuote: ${currTrade.p} prevQuote: ${prevTrade.p} -- currQuote.t = ${currTrade.t} --- prevQuote.t = ${prevTrade.t}`)
-        this.logger.log(LogLevel.TRACE, `Time difference in seconds: ${((currTrade.t / 1000) - (prevTrade.t / 1000))}`)
+    _getChangePercentPerMinute (currTrade: TradeEvent, prevTrade: TradeEvent): number {
+        this.logger.log(LogLevel.TRACE, `currQuote: ${currTrade.p} prevQuote: ${prevTrade.p} -- currQuote.t = ${currTrade.t} --- prevQuote.t = ${prevTrade.t}`);
+        this.logger.log(LogLevel.TRACE, `Time difference in seconds: ${((currTrade.t / 1000) - (prevTrade.t / 1000))}`);
+        let currTradePrice = new Decimal(currTrade.p);
+        let prevTradePrice = new Decimal(prevTrade.p);
         // This gets the difference between the two quotes, and get's the % of that change of a share price. i.e (11 - 10) / 11 = 10%;
-        const changePercent = ((currTrade.p - prevTrade.p) / currTrade.p);
+        let changePercent = new Decimal(currTradePrice.minus(prevTradePrice)).dividedBy(currTradePrice).times(100);
+
+        console.log(`ChangePercent: ${changePercent.toString()}`)
+        
         //Gets time difference in seconds, and translate to minutes
-        const timeDifferenceInMinutes = ((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60;
+        let currTradeSeconds = new Decimal(currTrade.t).dividedBy(1000);
+        let prevTradeSeconds = new Decimal(prevTrade.t).dividedBy(1000);
+
+        let timeDifferenceInMinutes = new Decimal(new Decimal(currTradeSeconds).minus(prevTradeSeconds)).dividedBy(60);
+
+        console.log(`TimeDifferenceInSeconds: ${timeDifferenceInMinutes.toString()}`)
 
         //Returns the rate of increase (as a percentage) per minute;
-        return changePercent / timeDifferenceInMinutes;
+        return changePercent.dividedBy(timeDifferenceInMinutes).toNumber();
     }
 
     close(): Promise<void> {

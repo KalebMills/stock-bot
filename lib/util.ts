@@ -210,3 +210,24 @@ export const getCurrentMarketStatus = (): Promise<string> => {
     })
     .catch((err: Error) => Promise.reject(new RequestError(err.message)));
 }
+
+export class Timer {
+    private startTime: [number, number];
+
+    constructor () {
+        this.startTime = [0, 0];
+    }
+
+
+    start(): void {
+        this.startTime = process.hrtime();
+    }
+
+    stop(): number {
+        let endTime = process.hrtime(this.startTime);
+        let totalNanoSeconds = endTime[0] * 1e9;
+        totalNanoSeconds = totalNanoSeconds + endTime[1];
+
+        return totalNanoSeconds;
+    }
+}

@@ -23,11 +23,13 @@ const workers_1 = require("../lib/workers");
 const exchange_1 = require("../lib/exchange");
 const notification_1 = require("../lib/notification");
 const data_source_1 = require("../lib/data-source");
+const metrics_1 = require("../lib/metrics");
 const data_store_1 = require("../lib/data-store");
 const util = __importStar(require("../lib/util"));
 const joi = __importStar(require("joi"));
 const chai = __importStar(require("chai"));
 let logger = util.createLogger({});
+let metric = new metrics_1.PhonyMetricProvider({ logger });
 let exchange = new exchange_1.AlpacasExchange({
     logger,
     acceptableGain: {
@@ -42,7 +44,7 @@ let exchange = new exchange_1.AlpacasExchange({
     secretKey: (process.env['ALPACAS_SECRET_KEY'] || "")
 });
 let notification = new notification_1.PhonyNotification({ logger });
-let datastore = new data_store_1.PhonyDataStore({ logger });
+let datastore = new data_store_1.PhonyDataStore({ logger, metric });
 // const QUOTE_EVENT: QuoteEvent = {
 //         "ev": "Q",              // Event Type
 //         "sym": "MSFT",          // Symbol Ticker
@@ -100,7 +102,8 @@ describe('#LiveDataStockWorker', () => {
             },
             exceptionHandler: (err) => { },
             _preProcessor: () => Promise.resolve(TRADE_EVENT),
-            dataSource: datasource
+            dataSource: datasource,
+            metric
         });
         chai.assert.instanceOf(worker, workers_1.LiveDataStockWorker);
     });
@@ -131,6 +134,34 @@ describe('#LiveDataStockWorker', () => {
     //         });
     //     });
     // });
+    it('Can properly calculate _getChangePercentPerMinute', () => {
+        let currentTrade = {
+            p: 104.14,
+            c: [],
+            ev: '',
+            i: '',
+            s: 0,
+            sym: 'TEST',
+            t: new Date().getTime(),
+            ticker: 'TEST',
+            x: 0,
+            z: 0
+        };
+        let previousTrade = {
+            p: 104.13,
+            c: [],
+            ev: '',
+            i: '',
+            s: 0,
+            sym: 'TEST',
+            t: new Date().getTime() - (180 * 1000),
+            ticker: 'TEST',
+            x: 0,
+            z: 0
+        };
+        let output = worker._getChangePercentPerMinute(currentTrade, previousTrade);
+        chai.assert.equal(output, 0.003200819409768901);
+    });
     it('Can close', () => {
         return worker.close()
             .then(() => Promise.all([exchange.close(), notification.close(), datastore.close(), datasource.close()]));
