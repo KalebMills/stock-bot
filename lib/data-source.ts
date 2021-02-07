@@ -12,6 +12,7 @@ import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
+import twit from 'twit';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -366,6 +367,108 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
                 this.polygonConn.close();
             });
         }
+    }
+}
+
+export interface TwitterDataSourceOptions extends IDataSourceOptions {
+    twitterIds: string[]; //The ID's of the people to look at
+    tickerList: string[];
+    twitterKey: string;
+    twitterSecret: string;
+    isMock?: boolean;
+}
+
+export class TwitterDataSource<T> extends DataSource<T> implements IDataSource<T> {
+    private client!: twit;
+    private clientStream!: twit.Stream;
+    private twitterIds: string[];
+    private work: string[];
+    private tickerList: string[];
+    private twitterKey: string;
+    private twitterSecret: string;
+    private isMock: boolean; //TODO: Probably should add this as part of the IDataSource interface so all datasources have the ability to be mocked out
+
+
+    constructor (options: TwitterDataSourceOptions) {
+        super(options);
+        this.twitterIds = options.twitterIds;
+        this.tickerList = options.tickerList;
+        this.twitterKey = options.twitterKey;
+        this.twitterSecret = options.twitterSecret;
+        this.work = [];
+        this.isMock = options.isMock ? options.isMock : false;
+    }
+
+    initialize(): Promise<void> {
+        if (!this.isMock) {
+            this.client = new twit({
+                consumer_key: this.twitterKey,
+                consumer_secret: this.twitterSecret
+            });
+    
+            this.clientStream = this.client.stream('user', { follow: this.twitterIds });
+    
+            this.clientStream.on('tweet', (tweet: string) => {
+                let output = this._processTweet(tweet);
+    
+                if (output) {
+                    this.work.push(output);
+                }
+            });
+        }
+
+        return Promise.resolve();
+    }
+
+    /**
+     * Currently we only support 2 ways of finding a ticker, check if a word with $ at the beginning of it is a ticker
+     * 
+     * @param tweet The tweet to process
+     * @returns {string | void} the ticker in the tweet, or nothing if the tweet does not contain a ticker
+     */
+
+    
+    _processTweet(tweet: string): string | void {
+        //Somehow, try to find a ticker in the tweet
+
+        const splitTweet: string[] = tweet.replace('\n', '').split(" ");
+
+        const ticker = splitTweet.filter(word => word.startsWith("$")); //TODO: This assumes anything that starts with $ is a ticker.. maybe validate against the ticker list
+        
+        const hasTicker: boolean = ticker.length > 0;
+
+        if (hasTicker) {
+            return ticker[0].replace("$", '');
+        } else {
+            return this._compareWordsToList(splitTweet);
+        }
+    }
+
+    _compareWordsToList(words: string[]): string | void {
+        let outputWord: string = '';
+        let filteredForTickerLength = words.filter(word => word.length <= 5); //5 because here it may be something like $AAPL
+
+        filteredForTickerLength.forEach((word: string) => {
+            let cleanWord: string = word.toUpperCase().replace(/[^\w\s]/gi, '');
+            let isTicker: boolean = this.tickerList.includes(cleanWord);
+
+            if (isTicker) {
+                outputWord = cleanWord;
+            }
+        });
+
+
+        if (outputWord) {
+            return outputWord;
+        }
+    }
+
+    scrapeDatasource(): Promise<T[]> {
+        return Promise.resolve([]);
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
     }
 }
 
