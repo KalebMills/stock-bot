@@ -72,7 +72,10 @@ describe('#TwitterDataSource', () => {
         twitterDataSource = new D.TwitterDataSource({
             logger,
             tickerList: ['AAPL', 'GOOG', 'TSLA'],
-            twitterIds: ['TEST'],
+            twitterAccounts: [{
+                    id: 'TEST_ID',
+                    type: D.TwitterAccountType.FAST_POSITION
+                }],
             isMock: true,
             twitterKey: '',
             twitterSecret: '',

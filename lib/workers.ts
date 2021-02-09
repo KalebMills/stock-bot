@@ -8,7 +8,7 @@ import * as exception from './exceptions';
 import { INotification } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
-import { IDataSource } from './data-source';
+import { IDataSource, SocialMediaOutput } from './data-source';
 import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
@@ -195,13 +195,6 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         super(options);
     }
 
-    initialize(): Promise<void> {
-        return super.initialize()
-        .then(() => {
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
-        });
-    }
-
     /*
         The use of this worker assumes the the PolygonLiveDataSource DataSource in the service
         The reason for this is that we expect the data that is coming through to be a different type than ITickerChange 
@@ -384,10 +377,6 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         return changePercent.dividedBy(timeDifferenceInMinutes).toNumber();
     }
 
-    close(): Promise<void> {
-        return super.close();
-    }
-
     /**
      * Calculates the relative volume.
      * This is the volume for the current day uptil the current minute / the volume from open until that respective minute for the last trading day.
@@ -421,6 +410,11 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
             return Promise.reject(new RequestError(`Error in ${this.constructor.name}._getRelativeVolume(): innerError: ${err} -- ${JSON.stringify(err)}`));
         })
     }
+}
 
-    
+export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
+
+    process(input: SocialMediaOutput): Promise<void> {
+        return Promise.resolve();
+    }
 }

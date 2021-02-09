@@ -12,7 +12,7 @@ import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
-import twit from 'twit';
+import twit, { Twitter } from 'twit';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -377,19 +377,35 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
     }
 }
 
+export enum TwitterAccountType {
+    LONG_POSITION,
+    FAST_POSITION,
+    OPTIONS_POSITION
+}
+
+export interface TwitterAccount {
+    id: string;
+    type: TwitterAccountType;
+}
+
+export interface SocialMediaOutput {
+    ticker: string;
+    type: TwitterAccountType;
+}
+
 export interface TwitterDataSourceOptions extends IDataSourceOptions {
-    twitterIds: string[]; //The ID's of the people to look at
+    twitterAccounts: TwitterAccount[]; //The ID's of the people to look at
     tickerList: string[];
     twitterKey: string;
     twitterSecret: string;
     isMock?: boolean;
 }
 
-export class TwitterDataSource extends DataSource<BaseStockEvent> implements IDataSource<BaseStockEvent> {
+export class TwitterDataSource extends DataSource<SocialMediaOutput> implements IDataSource<SocialMediaOutput> {
     private client!: twit;
     private clientStream!: twit.Stream;
-    private twitterIds: string[];
-    private work: BaseStockEvent[];
+    private twitterAccounts: TwitterAccount[];
+    private work: SocialMediaOutput[];
     private tickerList: string[];
     private twitterKey: string;
     private twitterSecret: string;
@@ -397,7 +413,7 @@ export class TwitterDataSource extends DataSource<BaseStockEvent> implements IDa
 
     constructor (options: TwitterDataSourceOptions) {
         super(options);
-        this.twitterIds = options.twitterIds;
+        this.twitterAccounts = options.twitterAccounts;
         this.tickerList = options.tickerList;
         this.twitterKey = options.twitterKey;
         this.twitterSecret = options.twitterSecret;
@@ -411,13 +427,13 @@ export class TwitterDataSource extends DataSource<BaseStockEvent> implements IDa
                 consumer_secret: this.twitterSecret
             });
     
-            this.clientStream = this.client.stream('user', { follow: this.twitterIds });
+            this.clientStream = this.client.stream('user', { follow: this.twitterAccounts.map(account => account.id) });
     
             this.clientStream.on('tweet', (tweet: string) => {
                 let output = this._processTweet(tweet);
     
                 if (output) {
-                    this.work.push({ ticker: output });
+                    this.work.push({ ticker: output, type: TwitterAccountType.FAST_POSITION }); //TODO: Placeholder
                 }
             });
         }
@@ -468,7 +484,7 @@ export class TwitterDataSource extends DataSource<BaseStockEvent> implements IDa
         }
     }
 
-    scrapeDatasource(): Promise<BaseStockEvent[]> {
+    scrapeDatasource(): Promise<SocialMediaOutput[]> {
         return Promise.resolve(this.work)
         .finally(() => {
             this.work = [];
