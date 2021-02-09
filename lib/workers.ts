@@ -5,10 +5,10 @@ import * as Alpacas from '@master-chief/alpaca';
 import moment from 'moment';
 import momentTimezone from 'moment-timezone';
 import * as exception from './exceptions';
-import { INotification } from './notification';
+import { INotification, NotificationOptions } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
-import { IDataSource, SocialMediaOutput } from './data-source';
+import { IDataSource, SocialMediaOutput, TwitterAccountType } from './data-source';
 import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
@@ -415,6 +415,45 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
 
     process(input: SocialMediaOutput): Promise<void> {
-        return Promise.resolve();
+        const { ticker, type } = input;
+        const notifyOptions: NotificationOptions = {
+            ticker,
+            message: `Received an alert for $${ticker.toUpperCase}`, //NOTE: This will be replaced somewhere below
+            additionaData: {
+                'Alert Type': type.toString()
+            }
+        }
+
+        const returnPromise: Promise<void> = Promise.resolve();
+        
+        if (type === TwitterAccountType.FAST_POSITION) {
+            //buy into position
+            returnPromise
+            .then(() => getTickerSnapshot(ticker))
+            .then(({ lastTrade: { p } }) => {
+                return this.exchange.placeOrder({
+                    symbol: ticker,
+                    qty: 100,
+                    side: 'buy',
+                    time_in_force: 'day',
+                    type: 'market',
+                    stop_loss: {
+                        stop_price: p - (p * .05), //Willing to lose 5% on a position
+                    },
+                    take_profit: {
+                        limit_price: p + (p * .15) //We want to try to take 15%
+                    }
+                }); //TODO: Need the current price of the stock to place a stop loss and take profit
+            })
+        } else if (type === TwitterAccountType.LONG_POSITION) {
+            this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`)
+        } else if (type === TwitterAccountType.OPTIONS_POSITION) {
+            this.logger.log(LogLevel.INFO, `Creating an alert for a Options Position`)
+        } else {
+            return Promise.reject(new exception.InvalidDataError(`${this.constructor.name}#process received an unsupported AccountType: ${type}`));
+        }
+
+        return returnPromise
+        .then(() => this.notification.notify(notifyOptions));
     }
 }
