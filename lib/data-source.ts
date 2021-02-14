@@ -12,7 +12,8 @@ import { InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
-import twit, { Twitter } from 'twit';
+import twit from 'twit';
+import { TextEncoder } from 'util';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -380,7 +381,8 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
 export enum TwitterAccountType {
     LONG_POSITION = 'LONG_POSITION',
     FAST_POSITION = 'FAST_POSITION',
-    OPTIONS_POSITION = 'OPTIONS_POSITION'
+    OPTIONS_POSITION = 'OPTIONS_POSITION',
+    UNKNOWN = 'UNKNOWN_POSITION'
 }
 
 export interface TwitterAccount {
@@ -391,6 +393,7 @@ export interface TwitterAccount {
 export interface SocialMediaOutput {
     ticker: string;
     type: TwitterAccountType;
+    account_name: string;
 }
 
 export interface TwitterDataSourceOptions extends IDataSourceOptions {
@@ -398,7 +401,22 @@ export interface TwitterDataSourceOptions extends IDataSourceOptions {
     tickerList: string[];
     twitterKey: string;
     twitterSecret: string;
+    twitterAccessToken: string;
+    twitterAccessSecret: string;
     isMock?: boolean;
+}
+
+export interface IncomingTweet {
+    id: number; //Tweet ID
+    text: string;
+    user: {
+        id: number; //User ID
+        screen_name: string;
+    }
+    timestamp_ms: string; //Unix MS
+    retweeted_status?: {    //The presence of this object tells us this is a retweet
+        [key: string]: any;
+    }
 }
 
 export class TwitterDataSource extends DataSource<SocialMediaOutput> implements IDataSource<SocialMediaOutput> {
@@ -409,6 +427,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     private tickerList: string[];
     private twitterKey: string;
     private twitterSecret: string;
+    private twitterAccessToken: string;
+    private twitterAccessSecret: string;
 
 
     constructor (options: TwitterDataSourceOptions) {
@@ -417,6 +437,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         this.tickerList = options.tickerList;
         this.twitterKey = options.twitterKey;
         this.twitterSecret = options.twitterSecret;
+        this.twitterAccessSecret = options.twitterAccessSecret;
+        this.twitterAccessToken = options.twitterAccessToken;
         this.work = [];
     }
 
@@ -424,17 +446,20 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         if (!this.isMock) {
             this.client = new twit({
                 consumer_key: this.twitterKey,
-                consumer_secret: this.twitterSecret
+                consumer_secret: this.twitterSecret,
+                access_token: this.twitterAccessToken,
+                access_token_secret: this.twitterAccessSecret
             });
     
-            this.clientStream = this.client.stream('user', { follow: this.twitterAccounts.map(account => account.id) });
+            this.clientStream = this.client.stream('statuses/filter', { follow: this.twitterAccounts.map(account => account.id), include_rts: false, exclude_replies: true  });
     
-            this.clientStream.on('tweet', (tweet: string) => {
-                let output = this._processTweet(tweet);
-    
-                if (output) {
-                    this.work.push({ ticker: output, type: TwitterAccountType.FAST_POSITION }); //TODO: Placeholder
-                }
+            this.clientStream.on('tweet', (data: IncomingTweet) => {
+                this._processTweet(data)
+                .then(output => {
+                    if (output) {
+                        this.work.push(output);
+                    }
+                }); //TODO: Error prone since we will be calling a model, should handle here
             });
         }
 
@@ -442,46 +467,48 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     }
 
     /**
-     * Currently we only support 2 ways of finding a ticker,
-     * 1. check if a word with $ at the beginning of it is a ticker
-     * 2. If we can match a word that is 4 characters long to a ticker in this.tickerList
-     * 
      * @param tweet The tweet to process
      * @returns {string | void} the ticker in the tweet, or nothing if the tweet does not contain a ticker
-     */
+    */
 
     
-    _processTweet(tweet: string): string | void {
-        const splitTweet: string[] = tweet.replace('\n', '').split(" ");
+    _processTweet(tweet: IncomingTweet): Promise<SocialMediaOutput | void> {
+        if (tweet.hasOwnProperty('retweeted_status')) {
+            return Promise.resolve(); //Do nothing since this is a retweet
+        }
+
+        console.log(JSON.stringify(tweet))
+
+        const splitTweet: string[] = tweet.text.replace(/\n/g, '').split(" ");
 
         const ticker = splitTweet.filter(word => word.startsWith("$"));
         
-        const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].toUpperCase());
+        const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].substring(1).toUpperCase());
 
         if (hasTicker) {
-            return ticker[0].replace("$", '');
+            return this._callTweetMLModel(tweet.text)
+            .then(() => {
+                //Return tweet data
+            })
         } else {
-            return this._compareWordsToList(splitTweet);
+            return Promise.resolve();
         }
     }
 
-    _compareWordsToList(words: string[]): string | void {
-        let outputWord: string = '';
-        let filteredForTickerLength = words.filter(word => word.length <= 5); //5 because here it may be something like $AAPL
+    //Placeholder for now until we get the model going
+    _callTweetMLModel(tweet: string): Promise<string> { //return SocialMediaOutput
+        return U.runCmd('')
+        .then(data => {
+            return '';
+        })
+    }
 
-        filteredForTickerLength.forEach((word: string) => {
-            let cleanWord: string = word.toUpperCase().replace('\n', '').replace(/[^\w\s]/gi, '');
-            let isTicker: boolean = this.tickerList.includes(cleanWord);
+    scrapeAllTickers(tweet: IncomingTweet): string[] {
+        const { text } = tweet;
 
-            if (isTicker) {
-                outputWord = cleanWord;
-            }
-        });
-
-
-        if (outputWord) {
-            return outputWord;
-        }
+        return text.split(" ")
+        .filter(word => word.startsWith("$"))
+        .map(word => word.replace("\n", "").replace(/[^\w\s]/gi, ''));
     }
 
     scrapeDatasource(): Promise<SocialMediaOutput[]> {

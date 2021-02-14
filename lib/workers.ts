@@ -425,6 +425,9 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
         }
 
         const returnPromise: Promise<void> = Promise.resolve();
+
+        returnPromise
+        .then(() => this.addToWatchlist('', input.ticker));
         
         if (type === TwitterAccountType.FAST_POSITION) {
             //buy into position
@@ -455,5 +458,11 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
 
         return returnPromise
         .then(() => this.notification.notify(notifyOptions));
+    }
+
+    addToWatchlist(listName: string, ticker: string): Promise<void> {
+        //We assume listName already exists in Alpacas
+        //NOTE: This functionality is not yet in the alpaca lib, so we are waiting for support
+        return Promise.resolve();
     }
 }
