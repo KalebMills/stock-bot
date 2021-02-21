@@ -8,7 +8,7 @@ import color from 'chalk';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PolygonGainersLosersSnapshot } from '../types/polygonSnapshot'
-import { InvalidDataError, UnprocessableEvent } from './exceptions'
+import { InvalidConfigurationError, InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
@@ -420,6 +420,16 @@ export interface IncomingTweet {
     }
 }
 
+const TwitterDataSourceOptionsSchema: joi.Schema = joi.object({
+    twitterAccounts: joi.array().required(),
+    tickerList: joi.array().required(),
+    twitterKey: joi.string().required(),
+    twitterSecret: joi.string().required(),
+    twitterAccessToken: joi.string().required(),
+    twitterAccessSecret: joi.string().required(),
+    isMock: joi.boolean()
+}).required();
+
 export class TwitterDataSource extends DataSource<SocialMediaOutput> implements IDataSource<SocialMediaOutput> {
     private client!: twit;
     private clientStream!: twit.Stream;
@@ -433,6 +443,12 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
 
 
     constructor (options: TwitterDataSourceOptions) {
+        let valid = TwitterDataSourceOptionsSchema.validate(options);
+
+        if (!valid) {
+            throw new InvalidConfigurationError('InvalidConfiguration for TwitterDataSource');
+        }
+
         super(options);
         this.twitterAccounts = options.twitterAccounts;
         this.tickerList = options.tickerList;
@@ -485,6 +501,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         const ticker = splitTweet.filter(word => word.startsWith("$"));
         
         const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].substring(1).toUpperCase());
+
+        console.log(`Tweet contains ticker: ${hasTicker}`)
 
         if (hasTicker) {
             return Promise.resolve({

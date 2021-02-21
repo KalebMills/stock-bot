@@ -429,7 +429,8 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
 
         const socialMediaMessage: NotificationOptions = {
             ticker,
-            message
+            message,
+            socialMediaMessage: true
         }
 
 
