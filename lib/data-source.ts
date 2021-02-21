@@ -394,6 +394,7 @@ export interface SocialMediaOutput {
     ticker: string;
     type: TwitterAccountType;
     account_name: string;
+    message: string;
 }
 
 export interface TwitterDataSourceOptions extends IDataSourceOptions {
@@ -471,13 +472,13 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
      * @returns {string | void} the ticker in the tweet, or nothing if the tweet does not contain a ticker
     */
 
-    
+    //TODO: Since this class is currently particular to a single account, we may have custom logic here for parsing expected words from a Tweet
     _processTweet(tweet: IncomingTweet): Promise<SocialMediaOutput | void> {
         if (tweet.hasOwnProperty('retweeted_status')) {
             return Promise.resolve(); //Do nothing since this is a retweet
         }
 
-        console.log(JSON.stringify(tweet))
+        console.log(JSON.stringify(tweet));
 
         const splitTweet: string[] = tweet.text.replace(/\n/g, '').split(" ");
 
@@ -486,21 +487,15 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].substring(1).toUpperCase());
 
         if (hasTicker) {
-            return this._callTweetMLModel(tweet.text)
-            .then(() => {
-                //Return tweet data
+            return Promise.resolve({
+                account_name: tweet.user.screen_name,
+                message: tweet.text,
+                ticker: ticker[0],
+                type: TwitterAccountType.LONG_POSITION
             })
         } else {
             return Promise.resolve();
         }
-    }
-
-    //Placeholder for now until we get the model going
-    _callTweetMLModel(tweet: string): Promise<string> { //return SocialMediaOutput
-        return U.runCmd('')
-        .then(data => {
-            return '';
-        })
     }
 
     scrapeAllTickers(tweet: IncomingTweet): string[] {
