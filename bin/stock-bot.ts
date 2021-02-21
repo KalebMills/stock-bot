@@ -8,12 +8,12 @@ const CONFIG_FILE_URL = `../conf/${CONFIG_FILE_NAME}`;
 const config: IStockServiceOptions = require(CONFIG_FILE_URL);
 
 
-const { error, errors } = StockBotOptionsValidationSchema.validate(config);
+const { error } = StockBotOptionsValidationSchema.validate(config);
 
 console.log(color.greenBright(`Loading from config ${CONFIG_FILE_NAME}.js`));
 
-if (error || errors) {
-    console.error(color.red(`An error occurred when loading StockService configuration: ${error} -- ${errors}`))
+if (error) {
+    console.error(color.red(`An error occurred when loading StockService configuration: ${error}`))
 } else {
     const service = new StockService(config);
     service.initialize()

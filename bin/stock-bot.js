@@ -9,10 +9,10 @@ require("../lib/util");
 const CONFIG_FILE_NAME = process.env['CONFIG_FILE'] || 'dev.js';
 const CONFIG_FILE_URL = `../conf/${CONFIG_FILE_NAME}`;
 const config = require(CONFIG_FILE_URL);
-const { error, errors } = stock_bot_1.StockBotOptionsValidationSchema.validate(config);
+const { error } = stock_bot_1.StockBotOptionsValidationSchema.validate(config);
 console.log(chalk_1.default.greenBright(`Loading from config ${CONFIG_FILE_NAME}.js`));
-if (error || errors) {
-    console.error(chalk_1.default.red(`An error occurred when loading StockService configuration: ${error} -- ${errors}`));
+if (error) {
+    console.error(chalk_1.default.red(`An error occurred when loading StockService configuration: ${error}`));
 }
 else {
     const service = new stock_bot_1.StockService(config);
