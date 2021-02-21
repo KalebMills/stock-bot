@@ -47,6 +47,30 @@ const prometheus_registry = new PrometheusMetricRegistry({
         description: 'Metric to track the size of the processables array',
         type: SUPPORTED_PROMETHEUS_METRIC_TYPES.GAUGE,
         labels: []
+    }, {
+        name: 'processedTickers',
+        metric_name: 'processed_ticker_count',
+        description: 'A metric to track the number of tickers processed',
+        type: SUPPORTED_PROMETHEUS_METRIC_TYPES.COUNTER,
+        labels: []
+    }, {
+        name: 'processingErrors',
+        metric_name: 'processing_error_count',
+        description: 'A metric to track the number of errors occurring during processing',
+        type: SUPPORTED_PROMETHEUS_METRIC_TYPES.COUNTER,
+        labels: ['errorType']
+    }, {
+        name: 'memoryStoreKeys',
+        metric_name: 'memory_store_keys_count',
+        description: 'A metric to track the number of keys in the memory store',
+        type: SUPPORTED_PROMETHEUS_METRIC_TYPES.GAUGE,
+        labels: []
+    }, {
+        name: 'memoryStoreSize', 
+        metric_name: 'memory_store_byte_size',
+        description: 'A metric to track the byte size of the memory datastore',
+        type: SUPPORTED_PROMETHEUS_METRIC_TYPES.GAUGE,
+        labels: []
     }]
 });
 
@@ -84,10 +108,10 @@ const datasource = new TwitterDataSource({
         id: '1054561163843751936', //@ripster47
         type: TwitterAccountType.FAST_POSITION
     }],
-    twitterKey: (process.env['TWITTER_API_KEY'] || ""),
-    twitterSecret: (process.env['TWITTER_API_SECRET'] || ""),
-    twitterAccessSecret: (process.env['TWITTER_ACCESS_SECRET'] || ""),
-    twitterAccessToken: (process.env['TWITTER_ACCSES_TOKEN'] || "")
+    twitterKey: (process.env['TWITTER_API_KEY']),
+    twitterSecret: (process.env['TWITTER_API_SECRET']),
+    twitterAccessSecret: (process.env['TWITTER_ACCESS_SECRET']),
+    twitterAccessToken: (process.env['TWITTER_ACCESS_TOKEN'])
 });
 
 // const datastore = new RedisDataStore({
@@ -133,7 +157,10 @@ const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
     token: (process.env['DISCORD_API_KEY'] || ""),
-    channelName: 'stock-notifications',
+    channels: {
+        "notificationChannel": "stock-notifications",
+        "socialMediaChannel": "twitter"
+    },
     client: DISCORD_CLIENT
 });
 
