@@ -428,18 +428,16 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
         }
 
         const returnPromise: Promise<void> = Promise.resolve();
-
-        returnPromise
-        .then(() => this.addToWatchlist('', input.ticker));
         
         if (type === TwitterAccountType.FAST_POSITION) {
             //buy into position
             returnPromise
             .then(() => getTickerSnapshot(ticker))
             .then(({ lastTrade: { p } }) => {
+                //TODO: Need a MUCH better way to go about determining position size, take profit and stop loss margins
                 return this.exchange.placeOrder({
                     symbol: ticker,
-                    qty: 100,
+                    qty: 10,
                     side: 'buy',
                     time_in_force: 'day',
                     type: 'market',
@@ -449,7 +447,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     take_profit: {
                         limit_price: p + (p * .15) //We want to try to take 15%
                     }
-                }); //TODO: Need the current price of the stock to place a stop loss and take profit
+                });
             })
         } else if (type === TwitterAccountType.LONG_POSITION) {
             this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`);
@@ -461,11 +459,5 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
 
         return returnPromise
         .then(() => this.notification.notify(notifyOptions));
-    }
-
-    addToWatchlist(listName: string, ticker: string): Promise<void> {
-        //We assume listName already exists in Alpacas
-        //NOTE: This functionality is not yet in the alpaca lib, so we are waiting for support
-        return Promise.resolve();
     }
 }
