@@ -419,13 +419,19 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
         // we can always output them to the Notification class since we want a log (and alert) on any processed tweet
 
         const { ticker, type, message } = input;
-        const notifyOptions: NotificationOptions = {
+        const notificationMessage: NotificationOptions = {
             ticker,
             message,
             additionaData: {
                 'Alert Type': type.toString()
             }
         }
+
+        const socialMediaMessage: NotificationOptions = {
+            ticker,
+            message
+        }
+
 
         const returnPromise: Promise<void> = Promise.resolve();
         
@@ -465,6 +471,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
         }
 
         return returnPromise
-        .then(() => this.notification.notify(notifyOptions));
+        .then(() => this.notification.notify(notificationMessage))
+        .then(() => this.notification.notify(socialMediaMessage));
     }
 }
