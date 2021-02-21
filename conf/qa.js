@@ -166,7 +166,10 @@ const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
     logger,
     token: (process.env['DISCORD_API_KEY'] || ""),
-    channelName: 'stock-notifications',
+    channels: {
+        "notificationChannel": "stock-notifications",
+        "socialMediaChannel": "twitter"
+    },
     client: DISCORD_CLIENT
 });
 
