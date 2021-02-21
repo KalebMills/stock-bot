@@ -1,4 +1,4 @@
-import { ITickerChange, IStockChange } from './stock-bot';
+import { ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import * as joi from 'joi';
 import * as U from './util';
 import axios, { AxiosResponse } from 'axios';
@@ -8,10 +8,12 @@ import color from 'chalk';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PolygonGainersLosersSnapshot } from '../types/polygonSnapshot'
-import { InvalidDataError, UnprocessableEvent } from './exceptions'
+import { InvalidConfigurationError, InvalidDataError, UnprocessableEvent } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
+import twit from 'twit';
+import { TextEncoder } from 'util';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -20,22 +22,27 @@ export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInit
     validateData(input: any): boolean;
     scrapeDatasource(): Promise<TOutput[]>;
     timeoutTicker(ticker: string, timeout?: number): void;
+    isMock: boolean;
 }
 
 export interface IDataSourceOptions {
     validationSchema: joi.Schema;
     logger: Logger;
+    isMock?: boolean;
 }
 
 export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     readonly validationSchema: joi.Schema;
     logger: Logger;
     timedOutTickers: Map<string, U.IDeferredPromise>;
+    isMock: boolean; //TODO: Implement the usage of this flag in the other DataSource super classes
 
     constructor(options: IDataSourceOptions) {
         this.validationSchema = options.validationSchema;
         this.logger = options.logger;
         this.timedOutTickers = new Map();
+        this.isMock = options.isMock ? options.isMock : false;
+
     }
 
     initialize(): Promise<void> {
@@ -368,6 +375,164 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
             })
             .then(() => super.close())
         }
+    }
+}
+
+export enum TwitterAccountType {
+    LONG_POSITION = 'LONG_POSITION',
+    FAST_POSITION = 'FAST_POSITION',
+    OPTIONS_POSITION = 'OPTIONS_POSITION',
+    UNKNOWN = 'UNKNOWN_POSITION'
+}
+
+export interface TwitterAccount {
+    id: string;
+    type: TwitterAccountType;
+}
+
+export interface SocialMediaOutput {
+    ticker: string;
+    type: TwitterAccountType;
+    account_name: string;
+    message: string;
+}
+
+export interface TwitterDataSourceOptions extends IDataSourceOptions {
+    twitterAccounts: TwitterAccount[]; //The ID's of the people to look at
+    tickerList: string[];
+    twitterKey: string;
+    twitterSecret: string;
+    twitterAccessToken: string;
+    twitterAccessSecret: string;
+    isMock?: boolean;
+}
+
+export interface IncomingTweet {
+    id: number; //Tweet ID
+    text: string;
+    user: {
+        id: number; //User ID
+        screen_name: string;
+    }
+    timestamp_ms: string; //Unix MS
+    retweeted_status?: {    //The presence of this object tells us this is a retweet
+        [key: string]: any;
+    }
+}
+
+const TwitterDataSourceOptionsSchema: joi.Schema = joi.object({
+    twitterAccounts: joi.array().required(),
+    tickerList: joi.array().required(),
+    twitterKey: joi.string().required(),
+    twitterSecret: joi.string().required(),
+    twitterAccessToken: joi.string().required(),
+    twitterAccessSecret: joi.string().required(),
+    isMock: joi.boolean()
+}).required();
+
+export class TwitterDataSource extends DataSource<SocialMediaOutput> implements IDataSource<SocialMediaOutput> {
+    private client!: twit;
+    private clientStream!: twit.Stream;
+    private twitterAccounts: TwitterAccount[];
+    private work: SocialMediaOutput[];
+    private tickerList: string[];
+    private twitterKey: string;
+    private twitterSecret: string;
+    private twitterAccessToken: string;
+    private twitterAccessSecret: string;
+
+
+    constructor (options: TwitterDataSourceOptions) {
+        let valid = TwitterDataSourceOptionsSchema.validate(options);
+
+        if (!valid) {
+            throw new InvalidConfigurationError('InvalidConfiguration for TwitterDataSource');
+        }
+
+        super(options);
+        this.twitterAccounts = options.twitterAccounts;
+        this.tickerList = options.tickerList;
+        this.twitterKey = options.twitterKey;
+        this.twitterSecret = options.twitterSecret;
+        this.twitterAccessSecret = options.twitterAccessSecret;
+        this.twitterAccessToken = options.twitterAccessToken;
+        this.work = [];
+    }
+
+    initialize(): Promise<void> {
+        if (!this.isMock) {
+            this.client = new twit({
+                consumer_key: this.twitterKey,
+                consumer_secret: this.twitterSecret,
+                access_token: this.twitterAccessToken,
+                access_token_secret: this.twitterAccessSecret
+            });
+    
+            this.clientStream = this.client.stream('statuses/filter', { follow: this.twitterAccounts.map(account => account.id), include_rts: false, exclude_replies: true  });
+    
+            this.clientStream.on('tweet', (data: IncomingTweet) => {
+                this._processTweet(data)
+                .then(output => {
+                    if (output) {
+                        this.work.push(output);
+                    }
+                }); //TODO: Error prone since we will be calling a model, should handle here
+            });
+        }
+
+        return Promise.resolve();
+    }
+
+    /**
+     * @param tweet The tweet to process
+     * @returns {string | void} the ticker in the tweet, or nothing if the tweet does not contain a ticker
+    */
+
+    //TODO: Since this class is currently particular to a single account, we may have custom logic here for parsing expected words from a Tweet
+    _processTweet(tweet: IncomingTweet): Promise<SocialMediaOutput | void> {
+        if (tweet.hasOwnProperty('retweeted_status')) {
+            return Promise.resolve(); //Do nothing since this is a retweet
+        }
+
+        console.log(JSON.stringify(tweet));
+
+        const splitTweet: string[] = tweet.text.replace(/\n/g, '').split(" ");
+
+        const ticker = splitTweet.filter(word => word.startsWith("$"));
+        
+        const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].substring(1).toUpperCase());
+
+        console.log(`Tweet contains ticker: ${hasTicker}`)
+
+        if (hasTicker) {
+            return Promise.resolve({
+                account_name: tweet.user.screen_name,
+                message: tweet.text,
+                ticker: ticker[0],
+                type: TwitterAccountType.LONG_POSITION
+            })
+        } else {
+            return Promise.resolve();
+        }
+    }
+
+    scrapeAllTickers(tweet: IncomingTweet): string[] {
+        const { text } = tweet;
+
+        return text.split(" ")
+        .filter(word => word.startsWith("$"))
+        .map(word => word.replace("\n", "").replace(/[^\w\s]/gi, ''));
+    }
+
+    scrapeDatasource(): Promise<SocialMediaOutput[]> {
+        return Promise.resolve(this.work)
+        .finally(() => {
+            this.work = [];
+        });
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
     }
 }
 
