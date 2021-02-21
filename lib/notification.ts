@@ -1,6 +1,7 @@
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import * as discord from 'discord.js';
-import * as winston from 'winston';
+import joi from 'joi';
+import { InvalidConfigurationError } from './exceptions';
 
 export interface NotificationOptions {
     ticker: string;
@@ -8,6 +9,7 @@ export interface NotificationOptions {
     additionaData?: { [key: string]: string | number }
     price?: number;
     volume?: number;
+    socialMediaMessage?: boolean;
 }
 
 export interface INotification<T = NotificationOptions> extends IInitializable, ICloseable {
@@ -18,15 +20,29 @@ export interface BaseNotificationOptions {
     logger: Logger;
 }
 
+export interface DiscordChannels {
+    socialMediaChannel: string;
+    notificationChannel: string;
+}
 
 export interface DiscordNotificationOptions extends BaseNotificationOptions {
     guildId: string;
     logger: Logger;
-    channelName: string;
+    channels: DiscordChannels;
     token: string;
     client: discord.Client;
 }
 
+const DiscordOptionsSchema: joi.Schema = joi.object({
+    guildId: joi.string().required(),
+    channels: joi.object({
+        socialMediaChannel: joi.string().required(),
+        notificationChannel: joi.string().required()
+    }).required(),
+    token: joi.string().required(),
+    client: joi.object({}).required(),
+    logger: joi.object({}).required()
+}).required();
 
 /*
     Currently this implementation expects to only work in a single Guild, and does not
@@ -37,14 +53,20 @@ export class DiscordNotification implements INotification {
     private readonly token: string;
     private logger: Logger;
     private guildId: string;
-    private channelName: string;
+    private channels: DiscordChannels;
 
     constructor(options: DiscordNotificationOptions) {
+        let valid: joi.ValidationResult = DiscordOptionsSchema.validate(options);
+
+        if (!valid) {
+            throw new InvalidConfigurationError('Invalid configuration for DiscordNotification class');
+        }
+
         this.client =  options.client;
         this.token = options.token;
         this.logger = options.logger;
         this.guildId = options.guildId;
-        this.channelName = options.channelName;
+        this.channels = options.channels;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
@@ -58,7 +80,7 @@ export class DiscordNotification implements INotification {
     notify(message: NotificationOptions): Promise<void> {
         return this.client.guilds.fetch(this.guildId, undefined, true)
         .then(guild => guild.channels)
-        .then(channels => channels.cache.find(c => c.name === this.channelName)!)
+        .then(channels => channels.cache.find(c => c.name === this._selectChannel(message))!)
         .then(channel => channel as discord.TextChannel)
         .then(channel => {
             // console.log(channel);
@@ -92,6 +114,10 @@ export class DiscordNotification implements INotification {
                 return Promise.reject(new Error(`No system channel is specified for the guild ${this.guildId}`));
             }
         });
+    }
+
+    private _selectChannel(message: NotificationOptions): string {
+        return message.socialMediaMessage ? this.channels['socialMediaChannel'] : this.channels['notificationChannel'];
     }
 
     close(): Promise<void> {

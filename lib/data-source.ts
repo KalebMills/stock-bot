@@ -53,9 +53,9 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     }
 
     validateData(input: any): boolean {
-        const { error, errors } = this.validationSchema.validate(input);
+        const { error } = this.validationSchema.validate(input);
         
-        if (error || errors) {
+        if (error) {
             return false;
         } else {
             return true;
