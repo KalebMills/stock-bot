@@ -435,19 +435,26 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             .then(() => getTickerSnapshot(ticker))
             .then(({ lastTrade: { p } }) => {
                 //TODO: Need a MUCH better way to go about determining position size, take profit and stop loss margins
-                return this.exchange.placeOrder({
-                    symbol: ticker,
-                    qty: 10,
-                    side: 'buy',
-                    time_in_force: 'day',
-                    type: 'market',
-                    stop_loss: {
-                        stop_price: p - (p * .05), //Willing to lose 5% on a position
-                    },
-                    take_profit: {
-                        limit_price: p + (p * .15) //We want to try to take 15%
+                return this.exchange.getBuyingPower()
+                .then((buyingPower: number) => {
+                    if (buyingPower > (p * 10)) {
+                        return this.exchange.placeOrder({
+                            symbol: ticker,
+                            qty: 10,
+                            side: 'buy',
+                            time_in_force: 'day',
+                            type: 'market',
+                            stop_loss: {
+                                stop_price: p - (p * .05), //Willing to lose 5% on a position
+                            },
+                            take_profit: {
+                                limit_price: p + (p * .15) //We want to try to take 15%
+                            }
+                        }).then(() => {});
+                    } else {
+                        return Promise.resolve();
                     }
-                });
+                })
             })
         } else if (type === TwitterAccountType.LONG_POSITION) {
             this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`);
