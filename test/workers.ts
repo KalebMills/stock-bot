@@ -160,7 +160,7 @@ describe('#LiveDataStockWorker', () => {
 
         let output = worker._getChangePercentPerMinute(currentTrade, previousTrade);
 
-        chai.assert.equal(output, 0.003200819409768901);
+        chai.assert.equal(Number(output.toFixed(5)), 0.0032);
     });
 
 
