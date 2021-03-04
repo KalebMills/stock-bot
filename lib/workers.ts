@@ -13,6 +13,7 @@ import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfiden
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 import { Decimal } from 'decimal.js';
+import colors from 'randomcolor';
 
 export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -418,18 +419,25 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
         //TODO: Since the tweets that make it to here are viable (filtered by the TwitterDataSource),
         // we can always output them to the Notification class since we want a log (and alert) on any processed tweet
 
-        const { ticker, type, message } = input;
+        const { type, message } = input;
         const notificationMessage: NotificationOptions = {
-            ticker,
+            ticker: '',
             message,
+            color: colors(),
             additionaData: {
-                'Alert Type': type.toString()
+                'Alert Type': type.toString(),
+                'User': input.account_name
             }
         }
 
         const socialMediaMessage: NotificationOptions = {
-            ticker,
+            ticker: '',
             message,
+            color: colors(),
+            additionaData: {
+                'User': input.account_name
+            },
+            urls: input.urls,
             socialMediaMessage: true
         }
 
@@ -439,40 +447,42 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
         if (type === TwitterAccountType.FAST_POSITION) {
             //buy into position
             returnPromise
-            .then(() => getTickerSnapshot(ticker))
+            .then(() => getTickerSnapshot(''))
             .then(({ lastTrade: { p } }) => {
+                returnPromise.then(() => this.notification.notify(notificationMessage));
                 //TODO: Need a MUCH better way to go about determining position size, take profit and stop loss margins
                 return this.exchange.getBuyingPower()
                 .then((buyingPower: number) => {
-                    if (buyingPower > (p * 10)) {
-                        return this.exchange.placeOrder({
-                            symbol: ticker,
-                            qty: 10,
-                            side: 'buy',
-                            time_in_force: 'day',
-                            type: 'market',
-                            stop_loss: {
-                                stop_price: p - (p * .05), //Willing to lose 5% on a position
-                            },
-                            take_profit: {
-                                limit_price: p + (p * .15) //We want to try to take 15%
-                            }
-                        }).then(() => {});
-                    } else {
-                        return Promise.resolve();
-                    }
+                    // if (buyingPower > (p * 10)) {
+                    //     return this.exchange.placeOrder({
+                    //         symbol: ticker,
+                    //         qty: 10,
+                    //         side: 'buy',
+                    //         time_in_force: 'day',
+                    //         type: 'market',
+                    //         stop_loss: {
+                    //             stop_price: p - (p * .05), //Willing to lose 5% on a position
+                    //         },
+                    //         take_profit: {
+                    //             limit_price: p + (p * .15) //We want to try to take 15%
+                    //         }
+                    //     }).then(() => {});
+                    // } else {
+                    //     return Promise.resolve();
+                    // }
                 })
             })
         } else if (type === TwitterAccountType.LONG_POSITION) {
+            returnPromise.then(() => this.notification.notify(notificationMessage));
             this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`);
         } else if (type === TwitterAccountType.OPTIONS_POSITION) {
             this.logger.log(LogLevel.INFO, `Creating an alert for a Options Position`);
+        } else if (type === TwitterAccountType.WATCHLIST) {
+            returnPromise.then(() => this.notification.notify(socialMediaMessage));
         } else {
             return Promise.reject(new exception.InvalidDataError(`${this.constructor.name}#process received an unsupported AccountType: ${type}`));
         }
 
-        return returnPromise
-        .then(() => this.notification.notify(notificationMessage))
-        .then(() => this.notification.notify(socialMediaMessage));
+        return returnPromise;
     }
 }
