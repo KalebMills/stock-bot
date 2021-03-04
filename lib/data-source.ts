@@ -510,26 +510,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
 
     initialize(): Promise<void> {
         if (!this.isMock) {
-        //     this.client = new twit({
-        //         consumer_key: this.twitterKey,
-        //         consumer_secret: this.twitterSecret,
-        //         access_token: this.twitterAccessToken,
-        //         access_token_secret: this.twitterAccessSecret,
-        //     });
-    
-        //     this.clientStream = this.client.stream('statuses/filter', { follow: this.twitterAccounts.map(account => account.id), include_rts: false, exclude_replies: true });
-    
-        //     this.clientStream.on('tweet', (data: IncomingTweet) => {
-        //         this._processTweet(data)
-        //         .then(output => {
-        //             if (output) {
-        //                 this.work.push(output);
-        //             }
-        //         }); //TODO: Error prone since we will be calling a model, should handle here
-        //     });
             this.startProcessing();
         }
-
 
         return Promise.resolve();
     }
@@ -635,7 +617,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
                     newObj['accountId'] = userId;
 
                     formatted.data.forEach((tweet, i) => {
-                        // Skip tweets that are in reply to someone
+                        // Skip tweets that are in reply to someone except to the users own self
                         if (tweet.in_reply_to_user_id && tweet.in_reply_to_user_id !== userId) {
                             return;
                         }
@@ -644,7 +626,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
                         
                         if (tweet.hasOwnProperty('attachments')) {
                             let mediaKeys = tweet.attachments.media_keys;
-                            tweetUrls.push(...formatted.includes.media.filter(attachment => mediaKeys.includes(attachment.media_key)).map(attachment => attachment.url));
+                            let matchedMediaKeysToAttachments = formatted.includes.media.filter(attachment => mediaKeys.includes(attachment.media_key)).map(attachment => attachment.url);
+                            tweetUrls.push(...matchedMediaKeysToAttachments);
                         }
 
                         newObj.tweets?.push({
@@ -664,7 +647,6 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         return this._scrapeAllTimelines()
         .then(data => this._getLatestTweetsFromEachAccount(data))
         .then(data => {
-            //next need to put the data into the expected shape. It does seem that this shape needs some changes
             data.forEach(account => {
                 let configuredAccount = this.twitterAccounts.find(acc => acc.id === account.accountId)!;
                 account.tweets.forEach(tweet => {
@@ -675,8 +657,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
                         message: tweet.text,
                         urls: tweet.urls
                     });
-                })
-            })
+                });
+            });
         });
     }
 
