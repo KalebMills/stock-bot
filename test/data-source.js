@@ -18,6 +18,15 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const D = __importStar(require("../lib/data-source"));
 const winston = __importStar(require("winston"));
@@ -74,6 +83,7 @@ describe('#TwitterDataSource', () => {
             tickerList: ['AAPL', 'GOOG', 'TSLA'],
             twitterAccounts: [{
                     id: 'TEST_ID',
+                    name: 'TEST_ACCOUNT',
                     type: D.TwitterAccountType.FAST_POSITION
                 }],
             isMock: true,
@@ -81,36 +91,95 @@ describe('#TwitterDataSource', () => {
             twitterSecret: '',
             twitterAccessSecret: '',
             twitterAccessToken: '',
-            validationSchema: joi.object({})
+            validationSchema: joi.object({}),
+            scrapeProcessDelay: 1000 //1 second
         });
         chai.assert.instanceOf(twitterDataSource, D.TwitterDataSource);
     });
-    //NOTE: This test has to wait until the model is completed
-    // it('Can properly screen a tweet', async () => {
-    //     const TWEET1: D.IncomingTweet = {
-    //         id: 1,
-    //         text: `$TSLA\n
-    //         This is going to be a hot stock because Elon is just a Chad.`,
-    //         timestamp_ms: new Date().getTime().toString(),
-    //         user: {
-    //             id: 1,
-    //             screen_name: 'TEST'
-    //         }
-    //     };
-    //     //TODO: This is a dumb case and it's usage should be removed from the code
-    //     const TWEET2: D.IncomingTweet = {
-    //         id: 2,
-    //         text: `$AAPL
-    //         This is gonna be a fantastic stock becuase Tim Cook wears his gray hair like the best I've ever seen.`,
-    //         timestamp_ms: new Date().getTime().toString(),
-    //         user: {
-    //             id: 2,
-    //             screen_name: 'TEST'
-    //         }
-    //     };
-    //     let output1: D.SocialMediaOutput = await twitterDataSource._processTweet(TWEET1)! as D.SocialMediaOutput;
-    //     let output2: D.SocialMediaOutput = await twitterDataSource._processTweet(TWEET2)! as D.SocialMediaOutput;
-    //     chai.assert.equal(output1.ticker, 'TSLA');
-    //     chai.assert.equal(output2.ticker, 'AAPL');
-    // });
+    it('Can properly get the latest tweets in a list', () => __awaiter(void 0, void 0, void 0, function* () {
+        const input1 = [
+            {
+                accountId: 'TEST1',
+                tweets: [{
+                        "id": "1366852154900705283",
+                        "text": "$WMT sell 130 3/19 puts @ $2.53 - this is naked. meaning if trades below this can be put to you. Stock is so oversold and beatup, i'm ok with that.",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366823916468113409",
+                        "text": "$ACB BUY - 1/2 position; also long $VFF 1/2 position for our pot play- I thought I alerted this earlier but cant find it. $10 stop $15 to $17.50 tgt range.",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366819751423541258",
+                        "text": "$FUV BUY buying back the 1/2 I sold earlier above $21 - $18.79",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366802143601176576",
+                        "text": "$PINS BUY 3/12 82 calls - Lotto Size - they are at an advertising event and they were talking it up @ the Morgan Stanley confence https://t.co/Jeuahi9miL",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366794726058393606",
+                        "text": "$PTON SELL 185 CALLS for  4/16 @ . These are +85% and will look to add them back if this can lift into the next month. good call from a subscriber. sold @ .62",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366793717479333894",
+                        "text": "$WWR BUY 1/2 position @ 6.44 - stop suggested 5.50",
+                        "urls": []
+                    }]
+            }
+        ];
+        const output1 = yield twitterDataSource._getLatestTweetsFromEachAccount(input1);
+        const output2 = yield twitterDataSource._getLatestTweetsFromEachAccount(input1);
+        const input2 = JSON.parse(JSON.stringify(input1));
+        //Add new tweet to list, acting as a new tweet coming in
+        const newTweet = {
+            id: 'TEST',
+            text: 'TEST',
+            urls: []
+        };
+        input2[0].tweets.unshift(newTweet);
+        const output3 = yield twitterDataSource._getLatestTweetsFromEachAccount(input2);
+        chai.expect(output1[0].tweets[0]).deep.equal(input1[0].tweets[0], 'assertion1 is not equal');
+        chai.expect(output2.length).equal(0, 'assertion2 is not equal');
+        chai.expect(output3[0].tweets[0]).deep.equal(newTweet, 'assertion3 is not equal');
+    }));
+    it('Does not overwrite prevIds of other accounts in list', () => __awaiter(void 0, void 0, void 0, function* () {
+        const input1 = [
+            {
+                accountId: 'TEST1',
+                tweets: [{
+                        "id": "1366852154900705283",
+                        "text": "$WMT sell 130 3/19 puts @ $2.53 - this is naked. meaning if trades below this can be put to you. Stock is so oversold and beatup, i'm ok with that.",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366823916468113409",
+                        "text": "$ACB BUY - 1/2 position; also long $VFF 1/2 position for our pot play- I thought I alerted this earlier but cant find it. $10 stop $15 to $17.50 tgt range.",
+                        "urls": []
+                    }]
+            }, {
+                accountId: 'TEST2',
+                tweets: [{
+                        "id": "1366794726058393606",
+                        "text": "$PTON SELL 185 CALLS for  4/16 @ . These are +85% and will look to add them back if this can lift into the next month. good call from a subscriber. sold @ .62",
+                        "urls": []
+                    },
+                    {
+                        "id": "1366793717479333894",
+                        "text": "$WWR BUY 1/2 position @ 6.44 - stop suggested 5.50",
+                        "urls": []
+                    }]
+            }
+        ];
+        let output1 = yield twitterDataSource._getLatestTweetsFromEachAccount(input1);
+        //Output is not used, but we run the function again to check out the `prevIds` property on the class is changed in the last assertion
+        let output2 = yield twitterDataSource._getLatestTweetsFromEachAccount(input1);
+        chai.expect(output1[0].tweets[0]).deep.equal(input1[0].tweets[0]);
+        chai.expect(output1[1].tweets[0]).deep.equal(input1[1].tweets[0]);
+        chai.expect(twitterDataSource['prevIds']).deep.equal(["TEST", input1[0].tweets[0].id, input1[1].tweets[0].id]);
+    }));
 });

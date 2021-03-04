@@ -1,4 +1,4 @@
-import { ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
+import { ITickerChange, IStockChange } from './stock-bot';
 import * as joi from 'joi';
 import * as U from './util';
 import axios, { AxiosResponse } from 'axios';
@@ -13,7 +13,9 @@ import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
 import twit from 'twit';
-import { TextEncoder } from 'util';
+import { OAuth } from 'oauth';
+import BPromise from 'bluebird';
+import { inspect } from 'util';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -42,7 +44,7 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
         this.logger = options.logger;
         this.timedOutTickers = new Map();
         this.isMock = options.isMock ? options.isMock : false;
-
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
     initialize(): Promise<void> {
@@ -382,19 +384,21 @@ export enum TwitterAccountType {
     LONG_POSITION = 'LONG_POSITION',
     FAST_POSITION = 'FAST_POSITION',
     OPTIONS_POSITION = 'OPTIONS_POSITION',
+    WATCHLIST = 'WATCHLIST',
     UNKNOWN = 'UNKNOWN_POSITION'
 }
 
 export interface TwitterAccount {
     id: string;
+    name: string;
     type: TwitterAccountType;
 }
 
 export interface SocialMediaOutput {
-    ticker: string;
     type: TwitterAccountType;
     account_name: string;
     message: string;
+    urls: string[];
 }
 
 export interface TwitterDataSourceOptions extends IDataSourceOptions {
@@ -404,7 +408,45 @@ export interface TwitterDataSourceOptions extends IDataSourceOptions {
     twitterSecret: string;
     twitterAccessToken: string;
     twitterAccessSecret: string;
+    scrapeProcessDelay: number; //Milliseconds
     isMock?: boolean;
+}
+
+export interface TwitterTimelineTweet {
+    id: string;
+    text: string;
+    urls: string[];
+}
+
+export interface _InternalTwitterTimelineTweet extends Omit<TwitterTimelineTweet, 'url'> {
+    in_reply_to_user_id?: string;
+    attachments: {
+        media_keys: string[]
+    }
+}
+
+export interface TwitterMediaAttachments {
+    media_key: string,
+    type: "photo",
+    url: string
+}
+
+export interface TwitterTweetListWithAccountId {
+    accountId: string;
+    tweets: TwitterTimelineTweet[];
+}
+
+export interface TwitterTimelineResponse {
+    data: _InternalTwitterTimelineTweet[],
+    meta: {
+        oldest_id: string;
+        newest_id: string;
+        result_count: number;
+        next_token: string;
+    }
+    includes: {
+        media: TwitterMediaAttachments[];
+    }
 }
 
 export interface IncomingTweet {
@@ -440,16 +482,23 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     private twitterSecret: string;
     private twitterAccessToken: string;
     private twitterAccessSecret: string;
+    private _scrapeProcess: Promise<any>; 
+    private _scrapeProcessDelay: number; //Milliseconds
+    private prevIds: string[];
 
 
     constructor (options: TwitterDataSourceOptions) {
+        super(options);
         let valid = TwitterDataSourceOptionsSchema.validate(options);
 
         if (!valid) {
             throw new InvalidConfigurationError('InvalidConfiguration for TwitterDataSource');
         }
 
-        super(options);
+        this._scrapeProcess = Promise.resolve();
+        this._scrapeProcessDelay = options.scrapeProcessDelay;
+        this.prevIds = []; //This property is used to track the latest tweets from each scrape
+
         this.twitterAccounts = options.twitterAccounts;
         this.tickerList = options.tickerList;
         this.twitterKey = options.twitterKey;
@@ -461,62 +510,26 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
 
     initialize(): Promise<void> {
         if (!this.isMock) {
-            this.client = new twit({
-                consumer_key: this.twitterKey,
-                consumer_secret: this.twitterSecret,
-                access_token: this.twitterAccessToken,
-                access_token_secret: this.twitterAccessSecret
-            });
-    
-            this.clientStream = this.client.stream('statuses/filter', { follow: this.twitterAccounts.map(account => account.id), include_rts: false, exclude_replies: true  });
-    
-            this.clientStream.on('tweet', (data: IncomingTweet) => {
-                this._processTweet(data)
-                .then(output => {
-                    if (output) {
-                        this.work.push(output);
-                    }
-                }); //TODO: Error prone since we will be calling a model, should handle here
-            });
+            this.startProcessing();
         }
 
         return Promise.resolve();
     }
 
-    /**
-     * @param tweet The tweet to process
-     * @returns {string | void} the ticker in the tweet, or nothing if the tweet does not contain a ticker
-    */
+    startProcessing = (): Promise<void> => {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing():INVOKED`);
 
-    //TODO: Since this class is currently particular to a single account, we may have custom logic here for parsing expected words from a Tweet
-    _processTweet(tweet: IncomingTweet): Promise<SocialMediaOutput | void> {
-        if (tweet.hasOwnProperty('retweeted_status')) {
-            return Promise.resolve(); //Do nothing since this is a retweet
-        }
-
-        console.log(JSON.stringify(tweet));
-
-        const splitTweet: string[] = tweet.text.replace(/\n/g, '').split(" ");
-
-        const ticker = splitTweet.filter(word => word.startsWith("$"));
-        
-        const hasTicker: boolean = ticker.length > 0 && this.tickerList.includes(ticker[0].substring(1).toUpperCase());
-
-        console.log(`Tweet contains ticker: ${hasTicker}`)
-
-        if (hasTicker) {
-            return Promise.resolve({
-                account_name: tweet.user.screen_name,
-                message: tweet.text,
-                ticker: ticker[0],
-                type: TwitterAccountType.LONG_POSITION
-            })
-        } else {
-            return Promise.resolve();
-        }
+        return BPromise.delay(this._scrapeProcessDelay)
+        .then(() => this.publishLatestTweets())
+        .catch(err => {
+            this.logger.log(LogLevel.ERROR, `Error occurred when scraping Twitter: ${inspect(err)}`)
+        })
+        .finally(() => {
+            this._scrapeProcess = this.startProcessing();
+        })
     }
 
-    scrapeAllTickers(tweet: IncomingTweet): string[] {
+    getAllTickersFromTweet(tweet: IncomingTweet): string[] {
         const { text } = tweet;
 
         return text.split(" ")
@@ -528,6 +541,124 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         return Promise.resolve(this.work)
         .finally(() => {
             this.work = [];
+        });
+    }
+
+    _getLatestTweetsFromEachAccount = (input: TwitterTweetListWithAccountId[]): Promise<TwitterTweetListWithAccountId[]> => {
+        let latestTweets: TwitterTweetListWithAccountId[] = [];
+
+        if (this.prevIds.length > 0) {
+            input.forEach(account => {
+                //Get the index of latest Tweet in the array (sorted newest to oldest)
+                let latestTweetIndex = account.tweets.findIndex(tweet => this.prevIds.includes(tweet.id));
+
+                if (latestTweetIndex !== -1) {
+                    const newTweets = account.tweets.slice(0, latestTweetIndex);
+
+                    if (newTweets.length > 0) {
+                        latestTweets.push({ accountId: account.accountId, tweets: newTweets });
+                    }
+
+                    let oldNewestIndex = this.prevIds.findIndex(id => id === account.tweets[latestTweetIndex].id);
+
+                    this.prevIds[oldNewestIndex] = account.tweets[0].id;
+                } else {
+                    // this is the first time the account was scraped before the others, so we initialize the first id just like we do in the outter else block
+                    this.prevIds.push(account.tweets[0].id);
+                    latestTweets.push({ accountId: account.accountId, tweets: [ account.tweets[0] ] });
+                }
+            });
+        } else {
+            input.forEach(account => {
+                this.prevIds.push(account.tweets[0].id);
+                latestTweets.push({ accountId: account.accountId, tweets: [ account.tweets[0] ] });
+            })
+        }
+
+        return Promise.resolve(latestTweets);
+    }
+
+    _scrapeAllTimelines = (): Promise<TwitterTweetListWithAccountId[]> => {
+        return Promise.all(this.twitterAccounts.map(acc => {
+            return this._fetchLatestTimeline(acc.id);
+        })).then(data => data.filter(val => !!val));
+    }
+
+    _fetchLatestTimeline = (userId: string): Promise<TwitterTweetListWithAccountId> => {
+        let request = new OAuth(
+            'https://api.twitter.com/oauth/request_token',
+            'https://api.twitter.com/oauth/access_token',
+            this.twitterKey,
+            this.twitterSecret,
+            '1.0A',
+            null,
+            'HMAC-SHA1'
+        )
+
+        return new Promise((resolve, reject) => {
+            request.get(
+                `https://api.twitter.com/2/users/${userId}/tweets?expansions=attachments.media_keys&media.fields=url&tweet.fields=in_reply_to_user_id`,
+                this.twitterAccessToken,
+                this.twitterAccessSecret,
+                function (e, data, res) {
+                    if (e) {
+                        reject(e.data)
+                    }
+
+                    let formatted: TwitterTimelineResponse =  JSON.parse(data?.toString()!);
+
+                    // Only a Partial for typing purposes
+                    let newObj: Partial<TwitterTweetListWithAccountId> = {};
+
+                    //@ts-ignore
+                    delete formatted.data['attachments'];
+
+                    newObj['tweets'] = [];
+                    newObj['accountId'] = userId;
+
+                    formatted.data.forEach((tweet, i) => {
+                        // Skip tweets that are in reply to someone except to the users own self
+                        if (tweet.in_reply_to_user_id && tweet.in_reply_to_user_id !== userId) {
+                            return;
+                        }
+
+                        let tweetUrls: string[] = [];
+                        
+                        if (tweet.hasOwnProperty('attachments')) {
+                            let mediaKeys = tweet.attachments.media_keys;
+                            let matchedMediaKeysToAttachments = formatted.includes.media.filter(attachment => mediaKeys.includes(attachment.media_key)).map(attachment => attachment.url);
+                            tweetUrls.push(...matchedMediaKeysToAttachments);
+                        }
+
+                        newObj.tweets?.push({
+                            id: tweet.id,
+                            text: tweet.text,
+                            urls: tweetUrls
+                        });
+                    });
+
+                    resolve(newObj as TwitterTweetListWithAccountId);
+                }
+            )
+        })
+    }
+
+    publishLatestTweets = () => {
+        return this._scrapeAllTimelines()
+        .then(data => this._getLatestTweetsFromEachAccount(data))
+        .then(data => {
+            data.forEach(account => {
+                let configuredAccount = this.twitterAccounts.find(acc => acc.id === account.accountId)!;
+                account.tweets.forEach(tweet => {
+                    this.logger.log(LogLevel.INFO, `Adding Tweet from ${configuredAccount.name} to work: ${tweet.text}`);
+                    this.work.push({
+                        account_name: configuredAccount.name,
+                        type: configuredAccount.type,
+                        message: tweet.text,
+                        urls: tweet.urls
+                    });
+                });
+            });
         });
     }
 

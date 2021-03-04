@@ -104,14 +104,25 @@ const datasource = new TwitterDataSource({
     logger,
     tickerList: t,
     validationSchema: joi.object({}),
-    twitterAccounts: [{
+    twitterAccounts: [
+        /*{
         id: '1054561163843751936', //@ripster47
         type: TwitterAccountType.FAST_POSITION
+    }, */ {
+        id: '1363664893975678978',
+        name: 'CSCproALERT',
+        type: TwitterAccountType.LONG_POSITION
+
+    }, {
+        id: '1350915232227594240',
+        name: 'CoiledSpringPro',
+        type: TwitterAccountType.WATCHLIST //Should go to 
     }],
     twitterKey: (process.env['TWITTER_API_KEY']),
     twitterSecret: (process.env['TWITTER_API_SECRET']),
     twitterAccessSecret: (process.env['TWITTER_ACCESS_SECRET']),
-    twitterAccessToken: (process.env['TWITTER_ACCESS_TOKEN'])
+    twitterAccessToken: (process.env['TWITTER_ACCESS_TOKEN']),
+    scrapeProcessDelay: 60000 // 1 minute
 });
 
 // const datastore = new RedisDataStore({
@@ -159,13 +170,13 @@ const notification = new DiscordNotification({
     token: (process.env['DISCORD_API_KEY'] || ""),
     channels: {
         "notificationChannel": "stock-notifications",
-        "socialMediaChannel": "twitter"
+        "socialMediaChannel": "watchlist", //TODO: This is bad, should be generic and the caller should be able to specify any channel
     },
     client: DISCORD_CLIENT
 });
 
 const serviceOptions = {
-    concurrency: 10,
+    concurrency: 1, //Should only have 1 thread here, since we want only 1 twitter connection and dont want to double process tweets
     logger,
     datasource,
     datastore,

@@ -10,6 +10,8 @@ export interface NotificationOptions {
     price?: number;
     volume?: number;
     socialMediaMessage?: boolean;
+    urls?: string[];
+    color?: string;
 }
 
 export interface INotification<T = NotificationOptions> extends IInitializable, ICloseable {
@@ -83,14 +85,17 @@ export class DiscordNotification implements INotification {
         .then(channels => channels.cache.find(c => c.name === this._selectChannel(message))!)
         .then(channel => channel as discord.TextChannel)
         .then(channel => {
-            // console.log(channel);
             if (channel) {
                 const embed = new discord.MessageEmbed()
-                .setColor('#8030ff')
+                .setColor(message.color || '#8030ff')
                 .setTitle(message.ticker)
-                .setDescription(`**${message.message}**`)
+                .setDescription(message.message)
                 .setTimestamp()
                 .setFooter('StockBot', 'https://icon2.cleanpng.com/20180402/xww/kisspng-chart-graph-of-a-function-infographic-information-stock-market-5ac2c6f186ff53.663225121522714353553.jpg');
+
+                if (message.urls && message.urls.length > 0) {
+                    message.urls.forEach(url => embed.setImage(url));
+                }
 
                 if (message.price) {
                     embed.addField('Price', `$${message.price}`, true);
