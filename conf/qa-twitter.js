@@ -111,7 +111,7 @@ const datasource = new TwitterDataSource({
     }, */ {
         id: '1363664893975678978',
         name: 'CSCproALERT',
-        type: TwitterAccountType.LONG_POSITION
+        type: TwitterAccountType.SWING_POSITION
 
     }, {
         id: '1350915232227594240',

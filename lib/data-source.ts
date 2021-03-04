@@ -381,6 +381,7 @@ export class PolygonLiveDataSource extends DataSource<TradeEvent> implements IDa
 }
 
 export enum TwitterAccountType {
+    SWING_POSITION = 'SWING_POSITION',
     LONG_POSITION = 'LONG_POSITION',
     FAST_POSITION = 'FAST_POSITION',
     OPTIONS_POSITION = 'OPTIONS_POSITION',

@@ -15,6 +15,13 @@ export interface IDeferredPromise {
     cancellable: Function;
 }
 
+export type actionSignals= "BUY"|"SELL"|"N/A"
+export interface tweetSignals {
+    tickers: string[],
+    action: actionSignals,
+    sizing?: number[]
+}
+
 export type MarketStatus = "OPEN" | "CLOSED"
 
 export const createDeferredPromise = (): IDeferredPromise => {
@@ -230,4 +237,63 @@ export class Timer {
 
         return totalNanoSeconds;
     }
+}
+
+export const extractTweetSignals = (tweet: string): tweetSignals => {
+    tweet = tweet.toUpperCase()
+    const splitTweet = tweet.replace('\n', '').split(" ");
+
+    //options trading not supported via alpacas
+    const blacklist = ["CALL", "PUT", "CALLS", "PUTS"]
+    const pos_actions = ["BOT", "BOUGHT", "BUY"]
+    const neg_actions = ["SOLD", "SELL", "STOPPED", "SL"]
+
+    const emptySignals: tweetSignals = {
+        tickers: [''],
+        action: "N/A"
+    }
+
+    let tickers = []
+    for(let word of splitTweet) {
+        if(blacklist.includes(word))
+        {
+            return emptySignals
+        }
+        //filtering out dollar amounts and SPAC warrants
+        if(word.startsWith("$") && isNaN(+word.substring(1)) && word.substring(-3) !== ".WS") {
+            //multiple tickers are sometimes bought or sold and alerted in the same tweet
+            tickers.push(word.substring(1))
+        }
+    }
+
+    //If both a buy and sell signal is part of the tweet, the first action in the tweet is the correct signal. 
+    let action: actionSignals
+    let buy
+    for(let action of pos_actions) {
+        if(splitTweet.includes(action)) {
+            buy = splitTweet.indexOf(action)
+            break
+        }
+    }
+    let sell
+    for(let action of neg_actions) {
+        if(splitTweet.includes(action)) {
+            sell = splitTweet.indexOf(action)
+            break
+        }
+    }
+    if(buy != undefined || sell != undefined) {
+        action = buy == undefined ? "SELL" : "BUY"
+    }
+    //no buy or sell signal detected
+    else {
+        return emptySignals
+    }
+
+    const extractedSignals: tweetSignals = {
+        tickers: tickers,
+        action: action
+    }
+
+    return extractedSignals
 }

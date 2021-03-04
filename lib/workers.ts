@@ -472,6 +472,9 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     // }
                 })
             })
+        } else if (type === TwitterAccountType.SWING_POSITION) {
+            returnPromise.then(() => this.notification.notify(notificationMessage));
+            this.logger.log(LogLevel.INFO, `Creating an alert for a Swing Position`);
         } else if (type === TwitterAccountType.LONG_POSITION) {
             returnPromise.then(() => this.notification.notify(notificationMessage));
             this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`);
