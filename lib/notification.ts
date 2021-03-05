@@ -12,6 +12,7 @@ export interface NotificationOptions {
     socialMediaMessage?: boolean;
     urls?: string[];
     color?: string;
+    action?: "BUY" | "SELL";
 }
 
 export interface INotification<T = NotificationOptions> extends IInitializable, ICloseable {

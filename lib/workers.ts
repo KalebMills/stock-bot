@@ -9,7 +9,7 @@ import { INotification, NotificationOptions } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource, SocialMediaOutput, TwitterAccountType } from './data-source';
-import { ConfidenceScoreOptions, convertDate, createDeferredPromise, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer } from './util';
+import { ConfidenceScoreOptions, convertDate, createDeferredPromise, extractTweetSignals, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer, tweetSignals } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 import { Decimal } from 'decimal.js';
@@ -473,8 +473,53 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                 })
             })
         } else if (type === TwitterAccountType.SWING_POSITION) {
-            returnPromise.then(() => this.notification.notify(notificationMessage));
-            this.logger.log(LogLevel.INFO, `Creating an alert for a Swing Position`);
+            let signals: tweetSignals = extractTweetSignals(message)
+            if(signals.action == "N/A") {
+                this.logger.log(LogLevel.INFO, `Tweet did not qualify for swing position.`);
+            }
+            else {
+                notificationMessage.action = signals.action;
+                for(let ticker of signals.tickers) {
+                    returnPromise
+                    .then(() => getTickerSnapshot(ticker))
+                    .then(({ lastTrade: { p } }) => {
+                        if(signals.action == "BUY") {
+                            return this.exchange.sizePosition(ticker)
+                            .then((qty: number) => {
+                                // if (buyingPower > (p * 10)) {
+                                //     return this.exchange.placeOrder({
+                                //         symbol: ticker,
+                                //         qty: qty,
+                                //         side: 'buy',
+                                //         time_in_force: 'day',
+                                //         type: 'market',
+                                //     }).then(() => {});
+                                // } else {
+                                //     return Promise.resolve();
+                                // }
+                                this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
+                                notificationMessage.price = p
+                                notificationMessage.action = "BUY"
+                                this.notification.notify(notificationMessage)
+                            })
+                        }
+                        else if(signals.action == "SELL") {
+                            return this.exchange.getPositionQty(ticker)
+                            .then((qty: number) => {
+                                //     return this.exchange.placeOrder({
+                                //         symbol: ticker,
+                                //         qty: qty,
+                                //         side: 'sell',
+                                //         time_in_force: 'day',
+                                //         type: 'market',
+                                //     }).then(() => {});
+                                notificationMessage.action = "SELL"
+                                this.logger.log(LogLevel.INFO, `Selling ${qty} shares of ${ticker}`);
+                            })
+                        }
+                    })
+                }
+            }
         } else if (type === TwitterAccountType.LONG_POSITION) {
             returnPromise.then(() => this.notification.notify(notificationMessage));
             this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`);
