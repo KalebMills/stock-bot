@@ -86,12 +86,12 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     // Assumes fractional shares are available
-    sizePosition(ticker: string): Promise<number> {
+    sizePosition(ticker: string, accountPercent: number, positionSize: number): Promise<number> {
         return Promise.all([this.getBuyingPower(), this.getPriceByTicker(ticker)])
         .then((data) => {
             let buyingPower = data[0]
             let currPrice = data[1]
-            return (buyingPower * 0.1)/currPrice
+            return (buyingPower * 0.1)/currPrice * positionSize
         })
     }
 
@@ -99,7 +99,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
         return this.getPositions()
         .then((positions) => {
             let position = positions.find(pos => { return pos.symbol === ticker})
-            return position == undefined ? 0 : position.qty
+            return position?.qty ?? 0
         })
     }
 

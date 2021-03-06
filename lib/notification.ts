@@ -2,6 +2,7 @@ import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import * as discord from 'discord.js';
 import joi from 'joi';
 import { InvalidConfigurationError } from './exceptions';
+import { ActionSignal } from './util';
 
 export interface NotificationOptions {
     ticker: string;
@@ -12,7 +13,7 @@ export interface NotificationOptions {
     socialMediaMessage?: boolean;
     urls?: string[];
     color?: string;
-    action?: "BUY" | "SELL";
+    action: ActionSignal
 }
 
 export interface INotification<T = NotificationOptions> extends IInitializable, ICloseable {

@@ -9,7 +9,7 @@ import { INotification, NotificationOptions } from './notification';
 import { IPurchaseOptions, ITickerChange, IStockChange, BaseStockEvent } from './stock-bot';
 import { IDataStore, DataStoreObject } from './data-store';
 import { IDataSource, SocialMediaOutput, TwitterAccountType } from './data-source';
-import { ConfidenceScoreOptions, convertDate, createDeferredPromise, extractTweetSignals, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer, tweetSignals } from './util';
+import { ActionSignal, ConfidenceScoreOptions, convertDate, createDeferredPromise, extractTweetSignals, getConfidenceScore, getTickerSnapshot, isHighVolume, minutesSinceOpen, returnLastOpenDay, Timer, TweetSignal } from './util';
 import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 import { Decimal } from 'decimal.js';
@@ -74,6 +74,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                     ticker: ticker.ticker,
                     price: ticker.price,
                     volume: Number(ticker.currentVol),
+                    action: ActionSignal.UNKNOWN,
                     message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
                         exchange: this.exchange.constructor.name,
@@ -96,6 +97,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                 return this.notification.notify({
                     ticker: ticker.ticker,
                     price: ticker.price,
+                    action: ActionSignal.UNKNOWN,
                     message: `${ticker.ticker} would not alert, it is ${changePercent.persuasion} ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
                         'Exchange': this.exchange.constructor.name,
@@ -323,6 +325,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                                 ticker: ticker,
                                 price: currTrade.p,
                                 message: `Ticker ${ticker} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
+                                action: ActionSignal.UNKNOWN,
                                 additionaData: {
                                     'Exchange': this.exchange.constructor.name,
                                     'DataSource': this.datasource.constructor.name,
@@ -424,6 +427,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             ticker: '',
             message,
             color: colors(),
+            action: ActionSignal.UNKNOWN,
             additionaData: {
                 'Alert Type': type.toString(),
                 'User': input.account_name
@@ -434,6 +438,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             ticker: '',
             message,
             color: colors(),
+            action: ActionSignal.UNKNOWN,
             additionaData: {
                 'User': input.account_name
             },
@@ -473,18 +478,19 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                 })
             })
         } else if (type === TwitterAccountType.SWING_POSITION) {
-            let signals: tweetSignals = extractTweetSignals(message)
-            if(signals.action == "N/A") {
-                this.logger.log(LogLevel.INFO, `Tweet did not qualify for swing position.`);
-            }
-            else {
-                notificationMessage.action = signals.action;
-                for(let ticker of signals.tickers) {
+            let signals: TweetSignal[] = extractTweetSignals(message)
+            for(let signal of signals) {
+                if(signal.action == ActionSignal.UNKNOWN) {
+                    this.logger.log(LogLevel.INFO, `Tweet did not qualify for swing position.`);
+                }
+                else {
+                    const ticker = signal.ticker
+                    notificationMessage.action = signal.action;
                     returnPromise
                     .then(() => getTickerSnapshot(ticker))
                     .then(({ lastTrade: { p } }) => {
-                        if(signals.action == "BUY") {
-                            return this.exchange.sizePosition(ticker)
+                        if(signal.action == ActionSignal.BUY) {
+                            return this.exchange.sizePosition(ticker, 0.1, signal.sizing)
                             .then((qty: number) => {
                                 // if (buyingPower > (p * 10)) {
                                 //     return this.exchange.placeOrder({
@@ -499,11 +505,11 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                 // }
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
                                 notificationMessage.price = p
-                                notificationMessage.action = "BUY"
+                                notificationMessage.action = ActionSignal.BUY
                                 this.notification.notify(notificationMessage)
                             })
                         }
-                        else if(signals.action == "SELL") {
+                        else if(signal.action == ActionSignal.SELL) {
                             return this.exchange.getPositionQty(ticker)
                             .then((qty: number) => {
                                 //     return this.exchange.placeOrder({
@@ -513,7 +519,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                 //         time_in_force: 'day',
                                 //         type: 'market',
                                 //     }).then(() => {});
-                                notificationMessage.action = "SELL"
+                                notificationMessage.action = ActionSignal.SELL
                                 this.logger.log(LogLevel.INFO, `Selling ${qty} shares of ${ticker}`);
                             })
                         }

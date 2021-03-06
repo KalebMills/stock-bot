@@ -15,11 +15,15 @@ export interface IDeferredPromise {
     cancellable: Function;
 }
 
-export type actionSignals= "BUY"|"SELL"|"N/A"
-export interface tweetSignals {
-    tickers: string[],
-    action: actionSignals,
-    sizing?: number[]
+export enum ActionSignal {
+    BUY,
+    SELL,
+    UNKNOWN
+}
+export interface TweetSignal {
+    ticker: string,
+    action: ActionSignal,
+    sizing: number
 }
 
 export type MarketStatus = "OPEN" | "CLOSED"
@@ -239,7 +243,8 @@ export class Timer {
     }
 }
 
-export const extractTweetSignals = (tweet: string): tweetSignals => {
+// TODO: Figure out a reliable way to extract position sizes from tweets, for now sizing is 1
+export const extractTweetSignals = (tweet: string): TweetSignal[] => {
     tweet = tweet.toUpperCase()
     const splitTweet = tweet.replace('\n', '').split(" ");
 
@@ -248,51 +253,41 @@ export const extractTweetSignals = (tweet: string): tweetSignals => {
     const pos_actions = ["BOT", "BOUGHT", "BUY"]
     const neg_actions = ["SOLD", "SELL", "STOPPED", "SL"]
 
-    const emptySignals: tweetSignals = {
-        tickers: [''],
-        action: "N/A"
-    }
+    const emptySignals: TweetSignal[] = [{
+        ticker: "",
+        action: ActionSignal.UNKNOWN,
+        sizing: 0
+    }]
 
-    let tickers = []
-    for(let word of splitTweet) {
-        if(blacklist.includes(word))
-        {
-            return emptySignals
-        }
-        //filtering out dollar amounts and SPAC warrants
-        if(word.startsWith("$") && isNaN(+word.substring(1)) && word.substring(-3) !== ".WS") {
-            //multiple tickers are sometimes bought or sold and alerted in the same tweet
-            tickers.push(word.substring(1))
-        }
-    }
+    let extractedSignals: TweetSignal[] = []
 
     //If both a buy and sell signal is part of the tweet, the first action in the tweet is the correct signal. 
-    let action: actionSignals
-    let buy
-    for(let action of pos_actions) {
-        if(splitTweet.includes(action)) {
-            buy = splitTweet.indexOf(action)
-            break
-        }
-    }
-    let sell
-    for(let action of neg_actions) {
-        if(splitTweet.includes(action)) {
-            sell = splitTweet.indexOf(action)
-            break
-        }
-    }
-    if(buy != undefined || sell != undefined) {
-        action = buy == undefined ? "SELL" : "BUY"
+    let action: ActionSignal
+    let buy = pos_actions.findIndex(word => splitTweet.includes(word))
+    let sell = neg_actions.findIndex(word => splitTweet.includes(word))
+
+    if(buy || sell) {
+        action = buy == undefined ? ActionSignal.SELL : ActionSignal.BUY
     }
     //no buy or sell signal detected
     else {
         return emptySignals
     }
 
-    const extractedSignals: tweetSignals = {
-        tickers: tickers,
-        action: action
+    for(let word of splitTweet) {
+        if(blacklist.includes(word))
+        {
+            return emptySignals
+        }
+        //filtering out dollar amounts
+        if(word.startsWith("$") && isNaN(+word.substring(1))) {
+            //multiple tickers are sometimes bought or sold and alerted in the same tweet
+            extractedSignals.push({
+                ticker: word.substring(1),
+                action: action,
+                sizing: 1
+            })
+        }
     }
 
     return extractedSignals
