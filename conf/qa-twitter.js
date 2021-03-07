@@ -184,7 +184,8 @@ const serviceOptions = {
     exchange,
     mainWorker: SocialMediaWorker,
     notification,
-    metric: prometheus_metric_provider
+    metric: prometheus_metric_provider,
+    accountPercent: 0.1
 };
 
 

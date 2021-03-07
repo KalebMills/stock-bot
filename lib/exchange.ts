@@ -86,7 +86,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     // Assumes fractional shares are available
-    sizePosition(ticker: string, accountPercent: number, positionSize: number): Promise<number> {
+    sizePosition(ticker: string, accountPercent: number = 0.1, positionSize: number): Promise<number> {
         return Promise.all([this.getBuyingPower(), this.getPriceByTicker(ticker)])
         .then((data) => {
             let buyingPower = data[0]
