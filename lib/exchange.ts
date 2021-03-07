@@ -98,7 +98,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     getPositionQty(ticker: string): Promise<number> {
         return this.getPositions()
         .then((positions) => {
-            let position = positions.find(pos => { return pos.symbol === ticker})
+            let position = positions.find(pos => pos.symbol === ticker)
             return position?.qty ?? 0
         })
     }

@@ -506,8 +506,8 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
                                 notificationMessage.price = p
                                 notificationMessage.action = ActionSignal.BUY
-                                this.notification.notify(notificationMessage)
                             })
+                            .then(() => this.notification.notify(notificationMessage))
                         }
                         else if(signal.action == ActionSignal.SELL) {
                             return this.exchange.getPositionQty(ticker)
@@ -522,6 +522,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                 notificationMessage.action = ActionSignal.SELL
                                 this.logger.log(LogLevel.INFO, `Selling ${qty} shares of ${ticker}`);
                             })
+                            .then(() => this.notification.notify(notificationMessage))
                         }
                     })
                 }
