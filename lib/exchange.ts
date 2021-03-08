@@ -4,6 +4,7 @@ import BPromise from 'bluebird';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import color from 'chalk';
 import { getCurrentMarketStatus } from './util';
+import e from 'express';
 
 export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
     logger: Logger;
@@ -82,6 +83,24 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
             type: 'market',
             time_in_force: 'day'
         });
+    }
+
+    // Assumes fractional shares are available
+    sizePosition(ticker: string, accountPercent: number = 0.1, positionSize: number): Promise<number> {
+        return Promise.all([this.getBuyingPower(), this.getPriceByTicker(ticker)])
+        .then((data) => {
+            let buyingPower = data[0]
+            let currPrice = data[1]
+            return (buyingPower * 0.1)/currPrice * positionSize
+        })
+    }
+
+    getPositionQty(ticker: string): Promise<number> {
+        return this.getPositions()
+        .then((positions) => {
+            let position = positions.find(pos => pos.symbol === ticker)
+            return position?.qty ?? 0
+        })
     }
 
     isMarketTime(): Promise<boolean> {

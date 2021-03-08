@@ -15,6 +15,17 @@ export interface IDeferredPromise {
     cancellable: Function;
 }
 
+export enum ActionSignal {
+    BUY,
+    SELL,
+    UNKNOWN
+}
+export interface TweetSignal {
+    ticker: string,
+    action: ActionSignal,
+    sizing: number
+}
+
 export type MarketStatus = "OPEN" | "CLOSED"
 
 export const createDeferredPromise = (): IDeferredPromise => {
@@ -230,4 +241,57 @@ export class Timer {
 
         return totalNanoSeconds;
     }
+}
+
+// TODO: Figure out a reliable way to extract position sizes from tweets, for now sizing is 1
+export const extractTweetSignals = (tweet: string): TweetSignal[] => {
+    tweet = tweet.toUpperCase()
+    const splitTweet = tweet.replace('\n', '').split(" ");
+
+    //options trading not supported via alpacas
+    const blacklist = ["CALL", "PUT", "CALLS", "PUTS", "WARRANT", "WARRANTS"]
+    const pos_actions = ["BUY"]
+    const neg_actions = ["SOLD", "SELL", "STOPPED"]
+
+    const emptySignals: TweetSignal[] = [{
+        ticker: "",
+        action: ActionSignal.UNKNOWN,
+        sizing: 0
+    }]
+
+    let extractedSignals: TweetSignal[] = []
+
+    //If both a buy and sell signal is part of the tweet, the first action in the tweet is the correct signal. 
+    let action: ActionSignal
+    let buy = splitTweet.findIndex(word => pos_actions.includes(word))
+    let sell = splitTweet.findIndex(word => neg_actions.includes(word))
+
+    if(buy != -1 && sell != -1) {
+        action = buy > sell ? ActionSignal.SELL : ActionSignal.BUY
+    }
+    else if (buy != -1 || sell != -1) {
+        action = buy == -1 ? ActionSignal.SELL : ActionSignal.BUY
+    }
+    //no buy or sell signal detected
+    else {
+        return emptySignals
+    }
+
+    for(let word of splitTweet) {
+        if(blacklist.includes(word))
+        {
+            return emptySignals
+        }
+        //filtering out dollar amounts
+        if(word.startsWith("$") && !/\d/.test(word)) {
+            //multiple tickers are sometimes bought or sold and alerted in the same tweet
+            extractedSignals.push({
+                ticker: word.substring(1),
+                action: action,
+                sizing: 1
+            })
+        }
+    }
+
+    return extractedSignals
 }

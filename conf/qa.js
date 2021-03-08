@@ -182,7 +182,8 @@ const serviceOptions = {
     exchange,
     mainWorker: LiveDataStockWorker,
     notification,
-    metric: prometheus_metric_provider
+    metric: prometheus_metric_provider,
+    accountPercent: 0.1
 };
 
 
