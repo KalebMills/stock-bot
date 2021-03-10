@@ -74,7 +74,6 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                     ticker: ticker.ticker,
                     price: ticker.price,
                     volume: Number(ticker.currentVol),
-                    action: ActionSignal.UNKNOWN,
                     message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
                         exchange: this.exchange.constructor.name,
@@ -89,7 +88,8 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                         highOfDay: `${ticker.highOfDay}`,
                         lowOfDay: `${ticker.lowOfDay}`,
                         prevClosePrice: `${ticker.prevDayClose}`,
-                        'DataSource': this.datasource.constructor.name
+                        'DataSource': this.datasource.constructor.name,
+                        'Action': ActionSignal.UNKNOWN,
                     }
                 });
             } else {
@@ -97,11 +97,11 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                 return this.notification.notify({
                     ticker: ticker.ticker,
                     price: ticker.price,
-                    action: ActionSignal.UNKNOWN,
                     message: `${ticker.ticker} would not alert, it is ${changePercent.persuasion} ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
                         'Exchange': this.exchange.constructor.name,
-                        'DataSource': this.datasource.constructor.name
+                        'DataSource': this.datasource.constructor.name,
+                        'Action': ActionSignal.UNKNOWN
                     }
                 });
             }
@@ -325,14 +325,14 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                                 ticker: ticker,
                                 price: currTrade.p,
                                 message: `Ticker ${ticker} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
-                                action: ActionSignal.UNKNOWN,
                                 additionaData: {
                                     'Exchange': this.exchange.constructor.name,
                                     'DataSource': this.datasource.constructor.name,
                                     'Measure Time': `${(((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60).toFixed(2)} Minutes`,
                                     'Previous Price': `${prevTrade.p}`,
                                     'Action Recommendation': 'Purchase',
-                                    'Confidence Score': `${confidenceScore}%`
+                                    'Confidence Score': `${confidenceScore}%`,
+                                    'Action': ActionSignal.UNKNOWN
                                 }
                             })
                             .then(() => {
@@ -419,6 +419,8 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
 
     process(input: SocialMediaOutput): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}:process(${JSON.stringify(input)})`);
+
         //TODO: Since the tweets that make it to here are viable (filtered by the TwitterDataSource),
         // we can always output them to the Notification class since we want a log (and alert) on any processed tweet
 
@@ -427,10 +429,10 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             ticker: '',
             message,
             color: colors(),
-            action: ActionSignal.UNKNOWN,
             additionaData: {
                 'Alert Type': type.toString(),
-                'User': input.account_name
+                'User': input.account_name,
+                'Action': ActionSignal.UNKNOWN
             }
         }
 
@@ -438,9 +440,9 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             ticker: '',
             message,
             color: colors(),
-            action: ActionSignal.UNKNOWN,
             additionaData: {
-                'User': input.account_name
+                'User': input.account_name,
+                'Action': ActionSignal.UNKNOWN
             },
             urls: input.urls,
             socialMediaMessage: true
@@ -478,55 +480,57 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                 })
             })
         } else if (type === TwitterAccountType.SWING_POSITION) {
-            let signals: TweetSignal[] = extractTweetSignals(message)
+            let signals: TweetSignal[] = extractTweetSignals(message);
+            this.logger.log(LogLevel.INFO, `Got signals for ${TwitterAccountType.SWING_POSITION} -- Signals: ${JSON.stringify(signals)}`);
             for(let signal of signals) {
                 if(signal.action == ActionSignal.UNKNOWN) {
                     this.logger.log(LogLevel.INFO, `Tweet did not qualify for swing position.`);
-                }
-                else {
-                    const ticker = signal.ticker
-                    notificationMessage.action = signal.action;
+                } else {
+                    const ticker = signal.ticker;
+                    notificationMessage.additionaData!['Action'] = signal.action;
                     returnPromise
                     .then(() => getTickerSnapshot(ticker))
                     .then(({ lastTrade: { p } }) => {
                         if(signal.action == ActionSignal.BUY) {
-                            return this.exchange.sizePosition(ticker, 0.1, signal.sizing)
-                            .then((qty: number) => {
-                                // if (buyingPower > (p * 10)) {
-                                //     return this.exchange.placeOrder({
-                                //         symbol: ticker,
-                                //         qty: qty,
-                                //         side: 'buy',
-                                //         time_in_force: 'day',
-                                //         type: 'market',
-                                //     }).then(() => {});
-                                // } else {
-                                //     return Promise.resolve();
-                                // }
+                            return Promise.all([ this.exchange.sizePosition(ticker, 0.1, signal.sizing), this.exchange.getBuyingPower() ])
+                            .then(([ qty, buyingPower]: [number, number]) => {
+                                const TOTAL_COST: number = new Decimal(qty * p).toNumber();
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
-                                notificationMessage.price = p
-                                notificationMessage.action = ActionSignal.BUY
+                                notificationMessage.price = p;
+                                notificationMessage.additionaData!['Action'] = ActionSignal.BUY;
+                                
+                                if (buyingPower > TOTAL_COST) {
+                                    return this.exchange.placeOrder({
+                                        symbol: ticker,
+                                        qty: qty,
+                                        side: 'buy',
+                                        time_in_force: 'day',
+                                        type: 'market',
+                                    }).then(() => {});
+                                } else {
+                                    return Promise.resolve();
+                                }
                             })
-                            .then(() => this.notification.notify(notificationMessage))
-                        }
-                        else if(signal.action == ActionSignal.SELL) {
+                        } else if(signal.action == ActionSignal.SELL) {
                             return this.exchange.getPositionQty(ticker)
                             .then((qty: number) => {
-                                //     return this.exchange.placeOrder({
-                                //         symbol: ticker,
-                                //         qty: qty,
-                                //         side: 'sell',
-                                //         time_in_force: 'day',
-                                //         type: 'market',
-                                //     }).then(() => {});
-                                notificationMessage.action = ActionSignal.SELL
+                                notificationMessage.additionaData!['Action'] = ActionSignal.SELL
                                 this.logger.log(LogLevel.INFO, `Selling ${qty} shares of ${ticker}`);
-                            })
-                            .then(() => this.notification.notify(notificationMessage))
+
+                                return this.exchange.placeOrder({
+                                    symbol: ticker,
+                                    qty: qty,
+                                    side: 'sell',
+                                    time_in_force: 'day',
+                                    type: 'market',
+                                }).then(() => {});
+                            });
                         }
-                    })
+                    });
                 }
             }
+
+            returnPromise.then(() => this.notification.notify(notificationMessage));
         } else if (type === TwitterAccountType.LONG_POSITION) {
             returnPromise.then(() => this.notification.notify(notificationMessage));
             this.logger.log(LogLevel.INFO, `Creating an alert for a Long Position`);

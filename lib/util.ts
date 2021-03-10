@@ -16,9 +16,9 @@ export interface IDeferredPromise {
 }
 
 export enum ActionSignal {
-    BUY,
-    SELL,
-    UNKNOWN
+    BUY = 'Buy',
+    SELL = 'Sell',
+    UNKNOWN = 'Unknown'
 }
 export interface TweetSignal {
     ticker: string,

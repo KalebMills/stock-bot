@@ -539,6 +539,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     }
 
     scrapeDatasource(): Promise<SocialMediaOutput[]> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#scrapeDataSource():INVOKED -- Returning: ${JSON.stringify(this.work)}`)
         return Promise.resolve(this.work)
         .finally(() => {
             this.work = [];

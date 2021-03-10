@@ -33,7 +33,9 @@ export const StockBotOptionsValidationSchema = joi.object({
     }).length(5),
     //Worker Options
     concurrency: joi.number().required(),
-    logger: joi.object().required() //Winston is not actually a class
+    logger: joi.object().required(),
+    accountPercent: joi.number().required()
+     //Winston is not actually a class
 });
 
 export interface BaseStockEvent {

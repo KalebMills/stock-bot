@@ -73,6 +73,15 @@ export class InvalidConfigurationError extends Error {
     }
 }
 
+export class InsufficentFundsError extends Error {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, InsufficentFundsError.prototype);
+        this.message = message || '';
+        this.name = this.constructor.name;
+    }
+}
+
 /**
  * When an axios GET request fails.
  */
