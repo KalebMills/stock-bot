@@ -15,18 +15,19 @@ import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 import { Decimal } from 'decimal.js';
 import colors from 'randomcolor';
 
-export interface IStockeWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
+export interface IStockWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
     // exchange: Exchange<TOrderInput, TOrderInput, TOrder>;
     exchange: AlpacasExchange;
     dataStore: IDataStore<T>;
     dataSource: IDataSource<T>;
     notification: INotification;
+    accountPercent: number;
 }
 
 //Required interface to allow generic construction of the StockWorker(s)
 export interface IStockWorker<TInput, TOuput = any> extends IWorker<TInput, TOuput> {
-    new (options: IStockeWorkerOptions<BaseStockEvent, Alpacas.PlaceOrder, Alpacas.Order>): IStockWorker<TInput, TOuput>;
+    new (options: IStockWorkerOptions<BaseStockEvent, Alpacas.PlaceOrder, Alpacas.Order>): IStockWorker<TInput, TOuput>;
 };
 
 /*
@@ -38,20 +39,22 @@ export abstract class StockWorker<T> extends Worker<T> {
     datasource: IDataSource<T>;
     exchange: AlpacasExchange;
     notification: INotification;
-    constructor(options: IStockeWorkerOptions<T, Alpacas.PlaceOrder, Alpacas.Order>) { //TODO: Needs to be more generically typed
+    accountPercent: number;
+    constructor(options: IStockWorkerOptions<T, Alpacas.PlaceOrder, Alpacas.Order>) { //TODO: Needs to be more generically typed
         super(options);
         this.datastore = options.dataStore;
         this.datasource = options.dataSource;
         this.exchange = options.exchange;
         this.notification = options.notification;
         this.metric = options.metric;
+        this.accountPercent  = options.accountPercent;
     }
 }
 
 export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange> {
     private purchaseOptions: IPurchaseOptions;
 
-    constructor(options: IStockeWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
+    constructor(options: IStockWorkerOptions<ITickerChange, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
         this.purchaseOptions = options.purchaseOptions;
     }
@@ -194,7 +197,7 @@ export interface TradeEvent extends BaseStockEvent {
 
 export class LiveDataStockWorker extends StockWorker<TradeEvent> {
 
-    constructor(options: IStockeWorkerOptions<TradeEvent, Alpacas.PlaceOrder, Alpacas.Order>) {
+    constructor(options: IStockWorkerOptions<TradeEvent, Alpacas.PlaceOrder, Alpacas.Order>) {
         super(options);
     }
 
@@ -466,7 +469,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     .then(() => this.exchange.getPriceByTicker(ticker))
                     .then((price: number) => {
                         if(signal.action == ActionSignal.BUY) {
-                            return Promise.all([ this.exchange.sizePosition(ticker, 0.1, signal.sizing), this.exchange.getBuyingPower() ])
+                            return Promise.all([ this.exchange.sizePosition(ticker, this.accountPercent, signal.sizing), this.exchange.getBuyingPower() ])
                             .then(([ qty, buyingPower]: [number, number]) => {
                                 const TOTAL_COST: number = new Decimal(qty * price).toNumber();
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
