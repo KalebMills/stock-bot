@@ -726,8 +726,3 @@ export class PhonyDataSource<T> extends DataSource<T> {
         return Promise.resolve([this.returnData]);
     }
 }
-
-let twelve = new TwelveDataDataSource({
-    logger: U.createLogger({}),
-    secret: '9a9aa3eda6msh7f0b65184e62fcdp132751jsn70ca008ca1f1'
-})
