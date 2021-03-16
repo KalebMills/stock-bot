@@ -32,16 +32,9 @@ let logger = util.createLogger({});
 let metric = new metrics_1.PhonyMetricProvider({ logger });
 let exchange = new exchange_1.AlpacasExchange({
     logger,
-    acceptableGain: {
-        type: 'percent',
-        unit: 3
-    },
-    acceptableLoss: {
-        type: 'percent',
-        unit: 2
-    },
     keyId: (process.env['ALPACAS_API_KEY'] || ""),
-    secretKey: (process.env['ALPACAS_SECRET_KEY'] || "")
+    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
+    commandClient: new notification_1.PhonyCommandClient()
 });
 let notification = new notification_1.PhonyNotification({ logger });
 let datastore = new data_store_1.PhonyDataStore({ logger, metric });
