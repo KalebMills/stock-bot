@@ -669,6 +669,48 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     }
 }
 
+export interface TwelveDataDataSourceOptions {
+    secret?: string;
+    logger: Logger;
+}
+
+export class TwelveDataDataSource implements IInitializable, ICloseable {
+    private readonly host: string;
+    private readonly secret: string;
+    logger: Logger;
+
+    constructor(options: TwelveDataDataSourceOptions) {
+        this.host = 'twelve-data1.p.rapidapi.com';
+        this.secret = options.secret || (process.env['TWELVE_DATA_API_KEY'] || "");
+        this.logger = options.logger;
+    }
+
+    initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    //TODO: Perhaps this is a worthy method to be added to the IDataSource interface
+    getTickerByPrice(ticker: string): Promise<number> {
+        const headers = {
+            "x-rapidapi-key": this.secret,
+	        "x-rapidapi-host": "twelve-data1.p.rapidapi.com",
+        }
+
+        return axios.get(`https://${this.host}/price`, {
+            headers,
+            params: {
+                symbol: ticker,
+                format: 'json',
+                outputsize: '1'
+            }
+        }).then(data => data.data.price);
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
+    }
+}
+
 export interface PhonyDataSourceOptions<T> extends DataSource<T> {
     returnData: T;
 }

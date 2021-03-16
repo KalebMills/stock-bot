@@ -86,7 +86,9 @@ const serviceOptions = {
             unit: 5,
             measurement: "hours"
         }
-    }
+    },
+    accountPercent: 0.01,
+    commandClient: new N.PhonyCommandClient()
 };
 let service;
 let worker;

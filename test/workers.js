@@ -96,7 +96,8 @@ describe('#LiveDataStockWorker', () => {
             exceptionHandler: (err) => { },
             _preProcessor: () => Promise.resolve(TRADE_EVENT),
             dataSource: datasource,
-            metric
+            metric,
+            accountPercent: .1
         });
         chai.assert.instanceOf(worker, workers_1.LiveDataStockWorker);
     });

@@ -3,8 +3,8 @@ import * as Alpacas from '@master-chief/alpaca';
 import BPromise from 'bluebird';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import color from 'chalk';
-import { CommandClient, DiscordClient } from './notification';
-import { Command } from 'ioredis';
+import { TwelveDataDataSource } from './data-source';
+import { CommandClient } from './notification';
 
 export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
     logger: Logger;
@@ -32,6 +32,7 @@ export interface IAcceptableTrade {
 
 export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
     logger: Logger;
+    private _dataSource: TwelveDataDataSource; //Explictly this datasource, not the IDataSource interface
     commandClient: CommandClient;
 
     constructor(options: AlpacasExchangeOptions) {
@@ -41,6 +42,10 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
                 secret: options.secretKey
             },
             rate_limit: true
+        });
+
+        this._dataSource = new TwelveDataDataSource({
+            logger: options.logger
         });
 
         this.logger = options.logger;
@@ -104,7 +109,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
         .then((data) => {
             let buyingPower = data[0]
             let currPrice = data[1]
-            return (buyingPower * 0.1)/currPrice * positionSize
+            return (buyingPower * accountPercent)/currPrice * positionSize
         })
     }
 
@@ -127,9 +132,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
-        //TODO: This will no longer work, we need a different datasource most likely
-        return this.getLastTrade({ symbol: ticker })
-        .then((trade: Alpacas.LastTrade) => trade.last.price);
+        return this._dataSource.getTickerByPrice(ticker);
     }
 
     initialize(): Promise<void> {

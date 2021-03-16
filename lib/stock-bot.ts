@@ -59,6 +59,7 @@ export interface IStockServiceOptions extends IServiceOptions {
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
     commandClient: CommandClient;
+    accountPercent: number;
     mainWorker: W.IStockWorker<BaseStockEvent>; //This is how we pass different algorithms to the service
 }
 
@@ -89,6 +90,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     datastore: IDataStore;
     notification: INotification;
     commandClient: CommandClient;
+    accountPercent: number;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -101,6 +103,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
         this.mainWorker = options.mainWorker;
         this.commandClient = options.commandClient;
+        this.accountPercent = options.accountPercent;
     }
 
     initialize(): Promise<void> {
@@ -197,9 +200,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         }
     }
 
-    makeWorker(options: IWorkerOptions): IWorker<BaseStockEvent> {
-        //TODO: Update this typing
-        //@ts-ignore
+    makeWorker(options: W.IStockWorkerOptions<any, any, any>): IWorker<BaseStockEvent> {
         return new this.mainWorker({
             ...options,
             _preProcessor: this.preProcess,
@@ -209,7 +210,8 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             notification: this.notification,
             dataSource: this.datasource,
             dataStore: this.datastore,
-            metric: this.metric
+            metric: this.metric,
+            accountPercent: this.accountPercent
         });
     }
 
