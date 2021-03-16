@@ -3,9 +3,8 @@ import * as Alpacas from '@master-chief/alpaca';
 import BPromise from 'bluebird';
 import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import color from 'chalk';
-import { getCurrentMarketStatus } from './util';
-import e from 'express';
 import { TwelveDataDataSource } from './data-source';
+import { CommandClient } from './notification';
 
 export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
     logger: Logger;
@@ -18,9 +17,7 @@ export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializ
 
 export interface ExchangeOptions {
     logger: Logger;
-    acceptableGain: IAcceptableTrade;
-    acceptableLoss: IAcceptableTrade;
-
+    commandClient: CommandClient;
 }
 
 interface AlpacasExchangeOptions extends ExchangeOptions {
@@ -36,6 +33,7 @@ export interface IAcceptableTrade {
 export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
     logger: Logger;
     private _dataSource: TwelveDataDataSource; //Explictly this datasource, not the IDataSource interface
+    commandClient: CommandClient;
 
     constructor(options: AlpacasExchangeOptions) {
         super({
@@ -51,6 +49,28 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
         });
 
         this.logger = options.logger;
+        this.commandClient = options.commandClient;
+
+        this.commandClient.registerCommandHandler({
+            command: 'account',
+            description: 'An overall look into the accounts value, equity, and buying power.',
+            registrar: this.constructor.name,
+            handler: () => this.getAccount().then(data => {
+                return `\n**Buying Power**: ${data.buying_power}
+                        \n**Cash**: ${data.cash}
+                        \n**Total Account Value**: ${data.equity}
+                        \n**Portfolio Value**: ${data.portfolio_value}
+                        \n**Day Trades Made**: ${data.daytrade_count}
+                        `
+            })
+        });
+
+        this.commandClient.registerCommandHandler({
+            command: 'positions',
+            description: 'Show the current positions the account is in.',
+            registrar: this.constructor.name,
+            handler: () => this._getPositionsCommand()
+        });
     }
 
     //TODO: Add in the functionality to get data for a ticker, buy, and sell. An exchange may also need a way to keep it's equity value???
@@ -108,7 +128,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
 
     getBuyingPower(): Promise<number> {
         return this.getAccount()
-        .then(res => res.daytrading_buying_power);
+        .then(res => res.buying_power);
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
@@ -121,6 +141,28 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
             this.logger.log(LogLevel.INFO, color.green(`${this.constructor.name}#initialize():SUCCESS`));
         })
     }
+
+    _getPositionsCommand = (): Promise<string> => {
+        return this.getPositions()
+        .then(positions => {
+            console.log(JSON.stringify(positions))
+            let str = '\n';
+            
+            if (positions.length) {
+                positions.forEach(position => {
+                    let pos = `$${position.symbol} - Unrealized P&L: ${position.unrealized_pl} - Average Price: ${position.avg_entry_price} - Current Price: ${position.current_price}`;
+                    str = str.concat(`${pos}\n`);
+                });
+            } else {
+                str = '**There are currently no positions.**';
+            }
+
+            console.log(`str = ${str}`)
+            return str;
+        });
+    }
+
+    
 
     close(): Promise<void> {
         //This used to close the client.. We may need to track this internally now since the client itself doesn't provide this

@@ -6,7 +6,7 @@ import moment from 'moment';
 import * as exception from './exceptions';
 import { DataSource, IDataSource } from './data-source';
 import * as joi from 'joi';
-import { INotification } from './notification';
+import { CommandClient, INotification } from './notification';
 import * as W from './workers';
 import { IDataStore } from './data-store';
 import { IDiagnostic } from './diagnostic';
@@ -34,7 +34,8 @@ export const StockBotOptionsValidationSchema = joi.object({
     //Worker Options
     concurrency: joi.number().required(),
     logger: joi.object().required(),
-    accountPercent: joi.number().required()
+    accountPercent: joi.number().required(),
+    commandClient: joi.object().required()
      //Winston is not actually a class
 });
 
@@ -57,6 +58,7 @@ export interface IStockServiceOptions extends IServiceOptions {
     exchange: AlpacasExchange;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
+    commandClient: CommandClient;
     mainWorker: W.IStockWorker<BaseStockEvent>; //This is how we pass different algorithms to the service
 }
 
@@ -86,6 +88,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     datasource: IDataSource;
     datastore: IDataStore;
     notification: INotification;
+    commandClient: CommandClient;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -97,11 +100,12 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.purchaseOptions = options.purchaseOptions;
         this.processables = []; // This will be an array of tickers that have yet to be processed. This will already be a filtered out from timedout tickers. The data here will be provided `_preProcess`
         this.mainWorker = options.mainWorker;
+        this.commandClient = options.commandClient;
     }
 
     initialize(): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
-        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize() ])
+        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize(), this.commandClient.initialize() ])
         .then(() => super.initialize())
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
@@ -240,7 +244,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
     
     close(): Promise<void> {
-        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close() ])
+        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close(), this.commandClient.close() ])
         .then(() => super.close());
     }
 }

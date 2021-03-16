@@ -480,12 +480,16 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                         side: 'buy',
                                         time_in_force: 'day',
                                         type: 'market',
-                                    }).then(() => {});
+                                    }).then(() => {
+                                        this.logger.log(LogLevel.INFO, `Placed a BUY for ${ticker} as a ${TwitterAccountType.SWING_POSITION}.`);
+                                    });
+
                                 } else {
                                     return Promise.resolve();
                                 }
                             })
                         } else if(signal.action == ActionSignal.SELL) {
+                            this.logger.log(LogLevel.INFO, `Got SELL action for ${ticker}`);
                             return this.exchange.getPositionQty(ticker)
                             .then((qty: number) => {
                                 notificationMessage.additionaData!['Action'] = ActionSignal.SELL
@@ -497,7 +501,9 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                     side: 'sell',
                                     time_in_force: 'day',
                                     type: 'market',
-                                }).then(() => {});
+                                }).then(() => {
+                                    this.logger.log(LogLevel.INFO, `Placed a SELL for ${ticker} as a ${TwitterAccountType.SWING_POSITION}.`);
+                                });
                             });
                         }
                     });
