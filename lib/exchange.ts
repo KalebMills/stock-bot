@@ -5,6 +5,7 @@ import { IInitializable, ICloseable, Logger, LogLevel } from './base';
 import color from 'chalk';
 import { getCurrentMarketStatus } from './util';
 import e from 'express';
+import { TwelveDataDataSource } from './data-source';
 
 export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
     logger: Logger;
@@ -34,8 +35,7 @@ export interface IAcceptableTrade {
 
 export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
     logger: Logger;
-    private acceptableGain: IAcceptableTrade;
-    private acceptableLoss: IAcceptableTrade;
+    private _dataSource: TwelveDataDataSource; //Explictly this datasource, not the IDataSource interface
 
     constructor(options: AlpacasExchangeOptions) {
         super({
@@ -46,17 +46,15 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
             rate_limit: true
         });
 
+        this._dataSource = new TwelveDataDataSource({
+            logger: options.logger
+        });
+
         this.logger = options.logger;
-        this.acceptableGain = options.acceptableGain;
-        this.acceptableLoss = options.acceptableLoss;
     }
 
     //TODO: Add in the functionality to get data for a ticker, buy, and sell. An exchange may also need a way to keep it's equity value???
     buy(args: Partial<Alpacas.PlaceOrder>): Promise<Alpacas.Order> {
-
-        const currStockPrice: number = 0; //Place holder until we have the ability to fetch that stocks current price
-        let takeProfitLimitPrice: number = currStockPrice + (currStockPrice * .3);  //BAD, this should be passed in
-
         return this.placeOrder({
             symbol: args.symbol!,
             qty: args.qty!,
@@ -91,7 +89,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
         .then((data) => {
             let buyingPower = data[0]
             let currPrice = data[1]
-            return (buyingPower * 0.1)/currPrice * positionSize
+            return (buyingPower * accountPercent)/currPrice * positionSize
         })
     }
 
@@ -114,8 +112,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
-        return this.getLastTrade({ symbol: ticker })
-        .then((trade: Alpacas.LastTrade) => trade.last.price);
+        return this._dataSource.getTickerByPrice(ticker);
     }
 
     initialize(): Promise<void> {

@@ -451,37 +451,11 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
 
         const returnPromise: Promise<void> = Promise.resolve();
         
-        if (type === TwitterAccountType.FAST_POSITION) {
-            //buy into position
-            returnPromise
-            .then(() => getTickerSnapshot(''))
-            .then(({ lastTrade: { p } }) => {
-                returnPromise.then(() => this.notification.notify(notificationMessage));
-                //TODO: Need a MUCH better way to go about determining position size, take profit and stop loss margins
-                return this.exchange.getBuyingPower()
-                .then((buyingPower: number) => {
-                    // if (buyingPower > (p * 10)) {
-                    //     return this.exchange.placeOrder({
-                    //         symbol: ticker,
-                    //         qty: 10,
-                    //         side: 'buy',
-                    //         time_in_force: 'day',
-                    //         type: 'market',
-                    //         stop_loss: {
-                    //             stop_price: p - (p * .05), //Willing to lose 5% on a position
-                    //         },
-                    //         take_profit: {
-                    //             limit_price: p + (p * .15) //We want to try to take 15%
-                    //         }
-                    //     }).then(() => {});
-                    // } else {
-                    //     return Promise.resolve();
-                    // }
-                })
-            })
-        } else if (type === TwitterAccountType.SWING_POSITION) {
+        if (type === TwitterAccountType.SWING_POSITION) {
             let signals: TweetSignal[] = extractTweetSignals(message);
+
             this.logger.log(LogLevel.INFO, `Got signals for ${TwitterAccountType.SWING_POSITION} -- Signals: ${JSON.stringify(signals)}`);
+
             for(let signal of signals) {
                 if(signal.action == ActionSignal.UNKNOWN) {
                     this.logger.log(LogLevel.INFO, `Tweet did not qualify for swing position.`);
@@ -489,14 +463,14 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     const ticker = signal.ticker;
                     notificationMessage.additionaData!['Action'] = signal.action;
                     returnPromise
-                    .then(() => getTickerSnapshot(ticker))
-                    .then(({ lastTrade: { p } }) => {
+                    .then(() => this.exchange.getPriceByTicker(ticker))
+                    .then((price: number) => {
                         if(signal.action == ActionSignal.BUY) {
                             return Promise.all([ this.exchange.sizePosition(ticker, 0.1, signal.sizing), this.exchange.getBuyingPower() ])
                             .then(([ qty, buyingPower]: [number, number]) => {
-                                const TOTAL_COST: number = new Decimal(qty * p).toNumber();
+                                const TOTAL_COST: number = new Decimal(qty * price).toNumber();
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
-                                notificationMessage.price = p;
+                                notificationMessage.price = price;
                                 notificationMessage.additionaData!['Action'] = ActionSignal.BUY;
                                 
                                 if (buyingPower > TOTAL_COST) {
