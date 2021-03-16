@@ -1,6 +1,6 @@
 import { LiveDataStockWorker, QuoteEvent, TradeEvent } from '../lib/workers';
 import { AlpacasExchange } from '../lib/exchange';
-import { NotificationOptions, PhonyNotification } from '../lib/notification';
+import { NotificationOptions, PhonyCommandClient, PhonyNotification } from '../lib/notification';
 import { DataSource, PhonyDataSource } from '../lib/data-source';
 import { PhonyMetricProvider } from '../lib/metrics';
 import { PhonyDataStore } from '../lib/data-store';
@@ -14,16 +14,9 @@ let metric = new PhonyMetricProvider({ logger });
 
 let exchange = new AlpacasExchange({
     logger,
-    acceptableGain: {
-        type: 'percent',
-        unit: 3
-    },
-    acceptableLoss: {
-        type: 'percent',
-        unit: 2
-    },
     keyId: (process.env['ALPACAS_API_KEY'] || ""),
-    secretKey: (process.env['ALPACAS_SECRET_KEY'] || "")
+    secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
+    commandClient: new PhonyCommandClient()
 })
 let notification = new PhonyNotification({ logger });
 let datastore = new PhonyDataStore({ logger, metric });

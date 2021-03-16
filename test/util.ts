@@ -74,6 +74,11 @@ describe('#extractTweetSignals', () => {
                 'signals': [
                     {ticker: 'SAVE', action: ActionSignal.BUY, sizing: 1}
                 ]
+            }, {
+                'message': '$SPLK BUY - LT account @ 139.50. can use 130 as stop, but in my LT account so will hold for a while as turnarounds take time.',
+                signals: [
+                    { ticker: 'SPLK', action: ActionSignal.BUY, sizing: 1 }
+                ]
             }
         ]
         for(let tweet of tweets) {

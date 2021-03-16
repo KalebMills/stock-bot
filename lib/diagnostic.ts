@@ -1,6 +1,7 @@
 import { ICloseable, IInitializable, LogLevel, Logger } from "./base";
 import * as discord from 'discord.js';
 import { createLogger } from "winston";
+import { DiscordClient } from "./notification";
 
 
 interface DiagnosticLogOptions {
@@ -21,7 +22,7 @@ export interface DiscordDiagnosticSystemOptions {
     guildId: string;
     channelName: string;
     token: string;
-    client: discord.Client;
+    client: DiscordClient;
 }
 
 /*
@@ -29,7 +30,7 @@ export interface DiscordDiagnosticSystemOptions {
 */
 
 export class DiscordDiagnosticSystem implements IDiagnostic {
-    private client: discord.Client;
+    private client: DiscordClient;
     private readonly guildId: string;
     private readonly channelName: string;
     private token: string;
@@ -45,10 +46,7 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
     }
 
     initialize(): Promise<void> {
-        return this.client.login(this.token)
-        .then(() => {
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
-        });
+        return Promise.resolve();
     }
 
     alert(options: DiagnosticLogOptions): Promise<void> {
@@ -65,7 +63,7 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
             }
         }
 
-        return this.client.guilds.fetch(this.guildId, undefined, true)
+        return this.client.getClient().guilds.fetch(this.guildId, undefined, true)
         .then(guild => guild.channels)
         .then(channels => channels.cache.find(c => c.name === this.channelName)!)
         .then(channel => channel as discord.TextChannel)
@@ -94,14 +92,7 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
 
 
     close(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            try {
-                this.client.destroy()
-                return resolve();
-            } catch (e) {
-                return reject(e);
-            }
-        });
+        return Promise.resolve();
     }
 }
 

@@ -6,7 +6,7 @@ const winston = require('winston');
 const discord = require('discord.js');
 const { PhonyExchange, AlpacasExchange } = require('../lib/exchange');
 const { DiscordDiagnosticSystem, PhonyDiagnostic } = require('../lib/diagnostic');
-const { DiscordNotification } = require('../lib/notification');
+const { DiscordNotification, DiscordClient } = require('../lib/notification');
 const { SocialMediaWorker } = require('../lib/workers');
 const { PrometheusMetricRegistry, PrometheusMetricProvider, SUPPORTED_PROMETHEUS_METRIC_TYPES } = require('../lib/metrics');
 const fs = require('fs');
@@ -98,7 +98,11 @@ const datasourceOptions = {
     subscribeTicker: t
 }
 
-const DISCORD_CLIENT = new discord.Client({});
+const DISCORD_CLIENT = new DiscordClient({
+    logger,
+    token: (process.env['DISCORD_API_TOKEN'] || ""),
+    commandPrefix: '!'
+});
 
 const datasource = new TwitterDataSource({
     logger,
@@ -146,23 +150,24 @@ const diagnostic = new DiscordDiagnosticSystem({
 // });
 
 
-const exchange = new PhonyExchange({
-    logger,
-});
-
-// const exchange = new AlpacasExchange({
-//     acceptableGain: {
-//         type: 'percent',
-//         unit: 1
-//     },
-//     acceptableLoss: {
-//         type: 'percent',
-//         unit: 1
-//     },
+// const exchange = new PhonyExchange({
 //     logger,
-//     keyId: process.env['ALPACAS_API_KEY'],
-//     secretKey: process.env['ALPACAS_SECRET_KEY']
-// })
+// });
+
+const exchange = new AlpacasExchange({
+    acceptableGain: {
+        type: 'percent',
+        unit: 1
+    },
+    acceptableLoss: {
+        type: 'percent',
+        unit: 1
+    },
+    logger,
+    keyId: process.env['ALPACAS_API_KEY'],
+    secretKey: process.env['ALPACAS_SECRET_KEY'],
+    commandClient: DISCORD_CLIENT
+})
 
 const notification = new DiscordNotification({
     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
@@ -185,7 +190,8 @@ const serviceOptions = {
     mainWorker: SocialMediaWorker,
     notification,
     metric: prometheus_metric_provider,
-    accountPercent: 0.1
+    accountPercent: 0.1,
+    commandClient: DISCORD_CLIENT
 };
 
 
