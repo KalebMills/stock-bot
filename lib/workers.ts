@@ -489,14 +489,13 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     const ticker = signal.ticker;
                     notificationMessage.additionaData!['Action'] = signal.action;
                     returnPromise
-                    .then(() => getTickerSnapshot(ticker))
-                    .then(({ lastTrade: { p } }) => {
+                    .then(() => {
                         if(signal.action == ActionSignal.BUY) {
                             return Promise.all([ this.exchange.sizePosition(ticker, 0.1, signal.sizing), this.exchange.getBuyingPower() ])
                             .then(([ qty, buyingPower]: [number, number]) => {
-                                const TOTAL_COST: number = new Decimal(qty * p).toNumber();
+                                const TOTAL_COST: number = new Decimal(qty * 10).toNumber();
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
-                                notificationMessage.price = p;
+                                notificationMessage.price = 10;
                                 notificationMessage.additionaData!['Action'] = ActionSignal.BUY;
                                 
                                 if (buyingPower > TOTAL_COST) {
@@ -506,12 +505,16 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                         side: 'buy',
                                         time_in_force: 'day',
                                         type: 'market',
-                                    }).then(() => {});
+                                    }).then(() => {
+                                        this.logger.log(LogLevel.INFO, `Placed a BUY for ${ticker} as a ${TwitterAccountType.SWING_POSITION}.`);
+                                    });
+
                                 } else {
                                     return Promise.resolve();
                                 }
                             })
                         } else if(signal.action == ActionSignal.SELL) {
+                            this.logger.log(LogLevel.INFO, `Got SELL action for ${ticker}`);
                             return this.exchange.getPositionQty(ticker)
                             .then((qty: number) => {
                                 notificationMessage.additionaData!['Action'] = ActionSignal.SELL
@@ -523,7 +526,9 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                     side: 'sell',
                                     time_in_force: 'day',
                                     type: 'market',
-                                }).then(() => {});
+                                }).then(() => {
+                                    this.logger.log(LogLevel.INFO, `Placed a SELL for ${ticker} as a ${TwitterAccountType.SWING_POSITION}.`);
+                                });
                             });
                         }
                     });
