@@ -28,4 +28,4 @@ jobs:
         node-version: ${{ matrix.node-version }}
     - run: npm ci
     - run: npm run build --if-present
-    - run: npx ./node_modules/.bin/mocha test
+    - run: npm test
