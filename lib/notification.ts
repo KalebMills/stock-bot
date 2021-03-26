@@ -158,7 +158,24 @@ export class DiscordClient extends EventEmitter implements CommandClient {
                 console.log(`Command has handler == true`)
                 let handler = this.commandHandlers[command].handler;
                 handler(content)
-                .then(data => {
+                .then((data: string) => {
+                    if (data.length > 2040) {
+                        let firstData = data.slice(0, 2040);
+                        let next = (data.slice(2040, data.length));
+
+                        let embed = new discord.MessageEmbed();
+
+                        embed.setDescription(firstData);
+                        embed.setColor(color());
+
+                        return message.reply(embed)
+                        .then(() => {
+                            //Bad, should have a sendMessage function that can be called recursively
+                            embed.setDescription(next);
+                            return message.reply(embed);
+                        });
+                    }
+
                     let embed = new discord.MessageEmbed();
 
                     embed.setDescription(data);
