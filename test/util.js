@@ -86,14 +86,14 @@ describe('#extractTweetSignals', () => {
                 ]
             },
             {
-                'message': '$SAVE BUY - adding back some of what I sold near $39 - @ 36.37. This is in my LT account. can use 33 as stop, but I do not use stops in my LT account. tgt $40-45',
+                'message': '$AMAT CLOSING CALL SPREAD - 3/19 110 vs 115 3/19 - 85% trade',
                 'signals': [
-                    { ticker: 'SAVE', action: util_1.ActionSignal.BUY, sizing: 1 }
+                    { ticker: 'AMAT', action: util_1.ActionSignal.SELL, sizing: 1 }
                 ]
             }, {
-                'message': '$SPLK BUY - LT account @ 139.50. can use 130 as stop, but in my LT account so will hold for a while as turnarounds take time.',
+                'message': '$SNAP LOTTO SIZE - BUY 65 calls 2/26 - trade into their analyst day tmrw. only buy what you are comfortable losing. I may add if weakens into end of day.',
                 signals: [
-                    { ticker: 'SPLK', action: util_1.ActionSignal.BUY, sizing: 1 }
+                    { ticker: 'SNAP', action: util_1.ActionSignal.BUY, sizing: 1 }
                 ]
             }
         ];
@@ -105,9 +105,8 @@ describe('#extractTweetSignals', () => {
     it('Returns empty signals for tweets with blacklisted words', () => {
         const tweets = [
             "$SPY SOLD 380 puts 2/16",
-            "$SNAP LOTTO SIZE - BUY 65 calls 2/26 - trade into their analyst day tmrw. only buy what you are comfortable losing. I may add if weakens into end of day.",
+            '$SPLK BUY - LT account @ 139.50. can use 130 as stop, but in my LT account so will hold for a while as turnarounds take time.',
             "$SPY BUY PUT HEDGE  370 3/19 - small just insurance",
-            "$AMAT CLOSING CALL SPREAD - 3/19 110 vs 115 3/19 - 85% trade",
         ];
         const emptySignal = [{
                 ticker: "",
