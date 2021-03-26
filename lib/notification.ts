@@ -33,13 +33,14 @@ export interface DiscordChannels {
 /*
     Wouldn't be a bad idea to move this to a separate file, but since notifications and commands are so intertwined, it's fine for now.
 */
-export type CommandHandler = () => Promise<string>;
+export type CommandHandler = (input?: string) => Promise<string>;
 
 export interface CommandContainer {
     handler: CommandHandler;
     description: string;
     registrar: string; //Who registered the command
     command: string;
+    usage: string;
 }
 
 export interface CommandClient extends IInitializable, ICloseable {
@@ -90,17 +91,18 @@ export class DiscordClient extends EventEmitter implements CommandClient {
             description: 'Help command to list all available commands.',
             handler: () => {
                     let cmds = Object.keys(this.commandHandlers).map(key => {
-                        const { command, description, registrar } = this.commandHandlers[key];
+                        const { command, description, registrar, usage } = this.commandHandlers[key];
 
-                        return `**${command}**: ${description}\nRegistered By: **${registrar}**`
+                        return `**${command}**: ${description}\n**Usage**: **${this.commandPrefix}${usage}**\nRegistered By: **${registrar}**`
                     })
                     cmds.unshift('\n');
 
                     return Promise.resolve(cmds.join('\n\n'));
                 
             },
-            registrar: this.constructor.name
-        })
+            registrar: this.constructor.name,
+            usage: `help`
+        });
     }
 
     initialize(): Promise<void> {
@@ -115,7 +117,7 @@ export class DiscordClient extends EventEmitter implements CommandClient {
     }
 
     registerCommandHandler(options: CommandContainer): void {
-        const { command, handler, description, registrar } = options;
+        const { command, handler, description, registrar, usage } = options;
         if (!this.commandHandlers.hasOwnProperty(command)) {
             let data = {
                 commandRegisteredBy: registrar,
@@ -128,7 +130,8 @@ export class DiscordClient extends EventEmitter implements CommandClient {
                 handler,
                 command,
                 registrar,
-                description
+                description,
+                usage
             }
 
             if (description) {
@@ -146,14 +149,15 @@ export class DiscordClient extends EventEmitter implements CommandClient {
         console.log(`is command: ${isCommand} -- prefix = ${this.commandPrefix}`);
 
         if (isCommand) {
-            let command = message.content.substring(1);
+            let command: string = message.content.split(" ")[0].substring(1);
+            let content: string = message.content.split(" ").slice(1).join(" ") || "";
 
             console.log(JSON.stringify(Object.keys(this.commandHandlers)));
 
             if (this.commandHandlers.hasOwnProperty(command)) {
                 console.log(`Command has handler == true`)
                 let handler = this.commandHandlers[command].handler;
-                handler()
+                handler(content)
                 .then(data => {
                     let embed = new discord.MessageEmbed();
 
@@ -176,8 +180,8 @@ export class DiscordClient extends EventEmitter implements CommandClient {
         return this._client;
     }
 
-    errorHandler(err: any) {
-        this.logger.log(LogLevel.ERROR, `${this.constructor.name}#errorHandler -- ${err}`);
+    errorHandler = (err: any) => {
+        this.logger.log(LogLevel.ERROR, `${this.constructor.name}#errorHandler -- ${inspect(err)}`);
     }
 
     close(): Promise<void> {

@@ -105,7 +105,7 @@ describe('#extractTweetSignals', () => {
     it('Returns empty signals for tweets with blacklisted words', () => {
         const tweets = [
             "$SPY SOLD 380 puts 2/16",
-            "$SNAP LOTTO SIZE - BUY 65 calls 2/26 - trade into their analyst day tmrw. only buy what you are comfortable losing. I may add if weakens into end of day.",
+            // "$SNAP LOTTO SIZE - BUY 65 calls 2/26 - trade into their analyst day tmrw. only buy what you are comfortable losing. I may add if weakens into end of day.",
             "$SPY BUY PUT HEDGE  370 3/19 - small just insurance",
             "$AMAT CLOSING CALL SPREAD - 3/19 110 vs 115 3/19 - 85% trade",
         ];

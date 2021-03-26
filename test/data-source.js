@@ -33,6 +33,7 @@ const winston = __importStar(require("winston"));
 const joi = __importStar(require("joi"));
 const assert = __importStar(require("assert"));
 const chai = __importStar(require("chai"));
+const notification_1 = require("../lib/notification");
 const logger = winston.createLogger({
     transports: [new winston.transports.Console()],
     level: "silly"
@@ -53,7 +54,8 @@ describe('#DataSource abstract class', () => {
             validationSchema: joi.object({
                 ticker: joi.string().required(),
                 price: joi.number().required()
-            })
+            }),
+            commandClient: new notification_1.PhonyCommandClient()
         };
         fakeDataSourceInstance = new FakeDatasource(baseOptions);
         chai.assert.instanceOf(fakeDataSourceInstance, D.DataSource);
@@ -81,6 +83,7 @@ describe('#TwitterDataSource', () => {
         twitterDataSource = new D.TwitterDataSource({
             logger,
             tickerList: ['AAPL', 'GOOG', 'TSLA'],
+            commandClient: new notification_1.PhonyCommandClient(),
             twitterAccounts: [{
                     id: 'TEST_ID',
                     name: 'TEST_ACCOUNT',

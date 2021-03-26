@@ -107,6 +107,7 @@ const DISCORD_CLIENT = new DiscordClient({
 const datasource = new TwitterDataSource({
     logger,
     tickerList: t,
+    commandClient: DISCORD_CLIENT,
     validationSchema: joi.object({}),
     twitterAccounts: [
         /*{

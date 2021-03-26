@@ -14,6 +14,7 @@ import { RequestError } from './exceptions';
 import { PolygonAggregates, PolygonTickerSnapshot, Snapshot } from '../types';
 import { Decimal } from 'decimal.js';
 import colors from 'randomcolor';
+import { inspect } from 'util';
 
 export interface IStockWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
@@ -472,14 +473,14 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                             return Promise.all([ this.exchange.sizePosition(ticker, this.accountPercent, signal.sizing), this.exchange.getBuyingPower() ])
                             .then(([ qty, buyingPower]: [number, number]) => {
                                 const TOTAL_COST: number = new Decimal(qty * price).toNumber();
-                                this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker}`);
+                                this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker} for ${TOTAL_COST}. We have ${buyingPower} Buying Power`);
                                 notificationMessage.price = price;
                                 notificationMessage.additionaData!['Action'] = ActionSignal.BUY;
                                 
                                 if (buyingPower > TOTAL_COST) {
                                     return this.exchange.placeOrder({
                                         symbol: ticker,
-                                        qty: qty,
+                                        qty: Math.ceil(qty),
                                         side: 'buy',
                                         time_in_force: 'day',
                                         type: 'market',
@@ -495,7 +496,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                             this.logger.log(LogLevel.INFO, `Got SELL action for ${ticker}`);
                             return this.exchange.getPositionQty(ticker)
                             .then((qty: number) => {
-                                notificationMessage.additionaData!['Action'] = ActionSignal.SELL
+                                notificationMessage.additionaData!['Action'] = ActionSignal.SELL;
                                 this.logger.log(LogLevel.INFO, `Selling ${qty} shares of ${ticker}`);
 
                                 return this.exchange.placeOrder({
@@ -506,8 +507,15 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                     type: 'market',
                                 }).then(() => {
                                     this.logger.log(LogLevel.INFO, `Placed a SELL for ${ticker} as a ${TwitterAccountType.SWING_POSITION}.`);
-                                });
+                                })
+                                .catch(err => {
+                                    this.logger.log(LogLevel.ERROR, inspect(err));
+
+                                    throw err;
+                                })
                             });
+                        } else {
+                            this.logger.log(LogLevel.INFO, `Hit the else block for Action: ${signal.action}`)
                         }
                     });
                 }
@@ -525,6 +533,10 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             return Promise.reject(new exception.InvalidDataError(`${this.constructor.name}#process received an unsupported AccountType: ${type}`));
         }
 
-        return returnPromise;
+        return returnPromise
+        .catch(err => {
+            this.logger.log(LogLevel.ERROR, inspect(err));
+            throw err;
+        });
     }
 }
