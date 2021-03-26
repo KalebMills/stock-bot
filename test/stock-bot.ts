@@ -19,7 +19,8 @@ const baseOptions: D.IDataSourceOptions = {
     validationSchema: joi.object({
         ticker: joi.string().required(),
         price: joi.number().required()
-    })
+    }),
+    commandClient: new N.PhonyCommandClient()
 }
 
 class FakeDatasource extends D.DataSource<ITickerChange> {

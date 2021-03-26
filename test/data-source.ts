@@ -4,6 +4,7 @@ import * as winston from 'winston';
 import * as joi from 'joi'
 import * as assert from 'assert';
 import * as chai from 'chai';
+import { PhonyCommandClient } from '../lib/notification';
 
 const logger =  winston.createLogger({
     transports: [ new winston.transports.Console() ],
@@ -30,7 +31,8 @@ describe('#DataSource abstract class', () => {
             validationSchema: joi.object({
                 ticker: joi.string().required(),
                 price: joi.number().required()
-            })
+            }),
+            commandClient: new PhonyCommandClient()
         }
         fakeDataSourceInstance = new FakeDatasource(baseOptions);
 
@@ -66,6 +68,7 @@ describe('#TwitterDataSource', () => {
         twitterDataSource = new D.TwitterDataSource({
             logger,
             tickerList: ['AAPL', 'GOOG', 'TSLA'],
+            commandClient: new PhonyCommandClient(),
             twitterAccounts: [{
                 id: 'TEST_ID',
                 name: 'TEST_ACCOUNT',

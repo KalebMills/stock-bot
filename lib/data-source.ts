@@ -8,7 +8,7 @@ import color from 'chalk';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PolygonGainersLosersSnapshot } from '../types/polygonSnapshot'
-import { InvalidConfigurationError, InvalidDataError, UnprocessableEvent } from './exceptions'
+import { InvalidConfigurationError, InvalidDataError, UnprocessableEvent, UnrecoverableWorkerError } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
@@ -16,6 +16,7 @@ import twit from 'twit';
 import { OAuth } from 'oauth';
 import BPromise from 'bluebird';
 import { inspect } from 'util';
+import { CommandClient } from './notification';
 
 
 export interface IDataSource <TOutput = ITickerChange> extends ICloseable, IInitializable {
@@ -31,6 +32,7 @@ export interface IDataSourceOptions {
     validationSchema: joi.Schema;
     logger: Logger;
     isMock?: boolean;
+    commandClient: CommandClient;
 }
 
 export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
@@ -38,12 +40,14 @@ export abstract class DataSource<TOutput> implements IDataSource<TOutput> {
     logger: Logger;
     timedOutTickers: Map<string, U.IDeferredPromise>;
     isMock: boolean; //TODO: Implement the usage of this flag in the other DataSource super classes
+    commandClient: CommandClient;
 
     constructor(options: IDataSourceOptions) {
         this.validationSchema = options.validationSchema;
         this.logger = options.logger;
         this.timedOutTickers = new Map();
         this.isMock = options.isMock ? options.isMock : false;
+        this.commandClient = options.commandClient;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
@@ -507,6 +511,19 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         this.twitterAccessSecret = options.twitterAccessSecret;
         this.twitterAccessToken = options.twitterAccessToken;
         this.work = [];
+
+        this.commandClient.registerCommandHandler({
+            command: 'redrive',
+            description: 'Used to rerun a previous message',
+            handler: msg =>  {
+                const [accountId, ...tweet] = msg!.split(" ");
+                this._redriveTweet(accountId, tweet.join(" "));
+
+                return Promise.resolve(`Redrove message from Account with Id ${accountId}`)
+            },
+            registrar: this.constructor.name,
+            usage: `redrive <account-id> <message>`
+        })
     }
 
     initialize(): Promise<void> {
@@ -540,7 +557,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
 
     scrapeDatasource(): Promise<SocialMediaOutput[]> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#scrapeDataSource():INVOKED -- Returning: ${JSON.stringify(this.work)}`)
-        return Promise.resolve(this.work)
+        return Promise.resolve([ ...this.work ])
         .finally(() => {
             this.work = [];
         });
@@ -664,6 +681,20 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         });
     }
 
+    _redriveTweet = (accountId: string, tweet: string): void => {
+        const account = this.twitterAccounts.find(acc => acc.id === accountId);
+        if (account) {
+            this.work.push({
+                account_name: account.name,
+                type: account.type,
+                message: tweet,
+                urls: []
+            });
+        } else {
+            return; //Do Nothing
+        }
+    }
+
     close(): Promise<void> {
         return Promise.resolve();
     }
@@ -703,7 +734,15 @@ export class TwelveDataDataSource implements IInitializable, ICloseable {
                 format: 'json',
                 outputsize: '1'
             }
-        }).then(data => data.data.price);
+        }).then(data => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#getTickerByPrice = status: ${data.status} statusText: ${data.statusText} -- code: ${data.data.code} -- data: ${inspect(data.data)}`)
+
+            if (data.data.hasOwnProperty('code') && data.data.code != 200) {
+                return Promise.reject(new UnrecoverableWorkerError(`ERROR: Failed to get current price for ${ticker}, MESSAGE: ${data.data.message}`));
+            }
+
+            return data.data.price;
+        });
     }
 
     close(): Promise<void> {
