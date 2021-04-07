@@ -22,33 +22,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const base_1 = require("../lib/base");
 const winston_1 = require("winston");
 const winston = __importStar(require("winston"));
-//Fake classes for tests
-class TestExchange {
-    constructor(options) {
-        this.logger = options.logger;
-    }
-    initialize() {
-        return Promise.resolve();
-    }
-    buy(args) {
-        return Promise.resolve("");
-    }
-    sell(args) {
-        return Promise.resolve("");
-    }
-    getPriceByTicker(args) {
-        return Promise.resolve(0);
-    }
-    getBuyingPower() {
-        return Promise.resolve(100000000);
-    }
-    close() {
-        return Promise.resolve();
-    }
-    isMarketTime() {
-        return Promise.resolve(true);
-    }
-}
 class TestService extends base_1.Service {
     constructor(options) {
         super(options);

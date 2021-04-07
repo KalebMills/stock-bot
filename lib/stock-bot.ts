@@ -1,7 +1,7 @@
 import { Service, IServiceOptions, IWorker, IWorkerOptions, LogLevel, promiseRetry } from './base';
 import BPromise from 'bluebird';
-import { PhonyExchange } from './exchange';
-import { AlpacasExchange } from './exchange';
+import { PhonyBroker } from './broker';
+import { AlpacasBroker } from './broker';
 import moment from 'moment';
 import * as exception from './exceptions';
 import { DataSource, IDataSource } from './data-source';
@@ -16,7 +16,7 @@ export const StockBotOptionsValidationSchema = joi.object({
     datasource: joi.object().instance(DataSource).required(),
     datastore: joi.required(), //TODO: Need a better way to type this
     diagnostic: joi.object().required(), //TODO: Need a better way to type this
-    exchange: joi.object().required(), //Currently we don't have a base Exchange class 
+    broker: joi.object().required(), //Currently we don't have a base Exchange class 
     metric: joi.object().required(),
     // exchange: joi.object().instance(AlpacasExchange).instance(PhonyExchange).required(), //Currently we don't have a base Exchange class 
     notification: joi.object().required(), //TODO: Need to figure out a way to do this correctly, like required particular properties
@@ -55,7 +55,7 @@ export interface IStockServiceOptions extends IServiceOptions {
     datastore: IDataStore;
     diagnostic: IDiagnostic;
     notification: INotification;
-    exchange: AlpacasExchange;
+    broker: AlpacasBroker;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>;
     purchaseOptions: IPurchaseOptions;
     commandClient: CommandClient;
@@ -83,7 +83,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     private processables: BaseStockEvent[];
     private purchaseOptions: IPurchaseOptions;
     private mainWorker: W.IStockWorker<BaseStockEvent>;
-    exchange: AlpacasExchange;
+    broker: AlpacasBroker;
     // exchange: Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order>; //TODO: This should be abstracted to the StockService level, and it should take in it's types from there.
     diagnostic: IDiagnostic;
     datasource: IDataSource;
@@ -94,7 +94,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
 
     constructor(options: IStockServiceOptions) {
         super(options);
-        this.exchange = options.exchange;
+        this.broker = options.broker;
         this.datasource = options.datasource;
         this.datastore = options.datastore;
         this.diagnostic = options.diagnostic;
@@ -108,7 +108,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
 
     initialize(): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
-        return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize(), this.commandClient.initialize() ])
+        return Promise.all([ this.broker.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize(), this.commandClient.initialize() ])
         .then(() => super.initialize())
         .then(() => {
             this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize:SUCCESS`);
@@ -207,7 +207,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             _preProcessor: this.preProcess,
             exceptionHandler: this.exceptionHandler,
             purchaseOptions: this.purchaseOptions,
-            exchange: this.exchange,
+            broker: this.broker,
             notification: this.notification,
             dataSource: this.datasource,
             dataStore: this.datastore,
@@ -247,7 +247,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
     
     close(): Promise<void> {
-        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close(), this.commandClient.close() ])
+        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.broker.close(), this.notification.close(), this.metric.close(), this.commandClient.close() ])
         .then(() => super.close());
     }
 }

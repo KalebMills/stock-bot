@@ -20,7 +20,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const workers_1 = require("../lib/workers");
-const exchange_1 = require("../lib/exchange");
+const broker_1 = require("../lib/broker");
 const notification_1 = require("../lib/notification");
 const data_source_1 = require("../lib/data-source");
 const metrics_1 = require("../lib/metrics");
@@ -30,7 +30,7 @@ const joi = __importStar(require("joi"));
 const chai = __importStar(require("chai"));
 let logger = util.createLogger({});
 let metric = new metrics_1.PhonyMetricProvider({ logger });
-let exchange = new exchange_1.AlpacasExchange({
+let broker = new broker_1.AlpacasBroker({
     logger,
     keyId: (process.env['ALPACAS_API_KEY'] || ""),
     secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
@@ -70,16 +70,16 @@ let datasource = new data_source_1.PhonyDataSource({
 });
 describe('#LiveDataStockWorker', () => {
     before(() => {
-        return Promise.all([exchange.initialize(), notification.initialize(), datastore.initialize(), datasource.initialize()]);
+        return Promise.all([broker.initialize(), notification.initialize(), datastore.initialize(), datasource.initialize()]);
     });
     after(() => {
-        return Promise.all([exchange.close(), notification.close(), datastore.close(), datasource.close()]);
+        return Promise.all([broker.close(), notification.close(), datastore.close(), datasource.close()]);
     });
     let worker;
     it('Can construct an instance of LiveDataStockWorker', () => {
         worker = new workers_1.LiveDataStockWorker({
             dataStore: datastore,
-            exchange,
+            broker,
             logger,
             id: 'TEST',
             notification,
@@ -158,6 +158,6 @@ describe('#LiveDataStockWorker', () => {
     });
     it('Can close', () => {
         return worker.close()
-            .then(() => Promise.all([exchange.close(), notification.close(), datastore.close(), datasource.close()]));
+            .then(() => Promise.all([broker.close(), notification.close(), datastore.close(), datasource.close()]));
     });
 });

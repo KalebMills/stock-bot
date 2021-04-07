@@ -4,7 +4,7 @@ import winston from 'winston';
 import { Logger, LogLevel } from '../lib/base';
 import * as assert from 'assert';
 import BPromise from 'bluebird';
-import { AlpacasExchange, PhonyExchange } from '../lib/exchange';
+import { AlpacasBroker, PhonyBroker } from '../lib/broker';
 import * as joi from 'joi';
 import * as D from '../lib/data-source';
 import * as N from '../lib/notification';
@@ -43,7 +43,7 @@ const dataStore = new PhonyDataStore({
 });
 
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
-const exchange = new PhonyExchange({
+const broker = new PhonyBroker({
     logger
 });
 

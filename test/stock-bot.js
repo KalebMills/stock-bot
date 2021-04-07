@@ -27,7 +27,7 @@ const workers_1 = require("../lib/workers");
 const winston_1 = __importDefault(require("winston"));
 const base_1 = require("../lib/base");
 const assert = __importStar(require("assert"));
-const exchange_1 = require("../lib/exchange");
+const broker_1 = require("../lib/broker");
 const joi = __importStar(require("joi"));
 const D = __importStar(require("../lib/data-source"));
 const N = __importStar(require("../lib/notification"));
@@ -59,7 +59,7 @@ const dataStore = new data_store_1.PhonyDataStore({
     metric
 });
 // TODO: Check if alpacas has a flag for a paper account, should assert that the key provided is for a paper account before running tests
-const exchange = new exchange_1.PhonyExchange({
+const broker = new broker_1.PhonyBroker({
     logger
 });
 const notification = new N.PhonyNotification({

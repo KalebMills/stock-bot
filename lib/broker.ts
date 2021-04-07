@@ -6,23 +6,26 @@ import color from 'chalk';
 import { TwelveDataDataSource } from './data-source';
 import { CommandClient } from './notification';
 import { Decimal } from 'decimal.js';
+import { isMarketOpen } from './util';
+import { NotSupported } from './exceptions';
 
 
-export interface Exchange<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
+export interface Broker<TBuyInput, TSellInput, TOrderOuput> extends IInitializable, ICloseable {
     logger: Logger;
     buy(args: TBuyInput): Promise<TOrderOuput>;
     sell(args: TSellInput): Promise<TOrderOuput>;
     getPriceByTicker(ticker: string): Promise<number>;
     isMarketTime(): Promise<boolean>;
     getBuyingPower(): Promise<number>;
+    getAccountValue(): Promise<number>;
 }
 
-export interface ExchangeOptions {
+export interface BrokerOptions {
     logger: Logger;
     commandClient: CommandClient;
 }
 
-interface AlpacasExchangeOptions extends ExchangeOptions {
+interface AlpacasBrokerOptions extends BrokerOptions {
     keyId: string;
     secretKey: string;
 }
@@ -32,12 +35,12 @@ export interface IAcceptableTrade {
     type: 'percent' | 'dollar';
 }
 
-export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
+export class AlpacasBroker extends Alpacas.AlpacaClient implements Broker<Alpacas.PlaceOrder, Alpacas.PlaceOrder, Alpacas.Order> {
     logger: Logger;
     private _dataSource: TwelveDataDataSource; //Explictly this datasource, not the IDataSource interface
     commandClient: CommandClient;
 
-    constructor(options: AlpacasExchangeOptions) {
+    constructor(options: AlpacasBrokerOptions) {
         super({
             credentials: {
                 key: options.keyId,
@@ -140,7 +143,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
 
     }
 
-    //TODO: Add in the functionality to get data for a ticker, buy, and sell. An exchange may also need a way to keep it's equity value???
+    //TODO: Add in the functionality to get data for a ticker, buy, and sell. A broker may also need a way to keep it's equity value???
     buy(args: Partial<Alpacas.PlaceOrder>): Promise<Alpacas.Order> {
         return this.placeOrder({
             symbol: args.symbol!,
@@ -203,17 +206,12 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
 
     getPriceByTicker(ticker: string): Promise<number> {
         return this._dataSource.getTickerByPrice(ticker);
-        // return this.getTrades({
-        //     symbol: ticker,
-        //     start: new Date(),
-        //     end: new Date()
-        // })
-        // .then(data => {
-        //     return data.trades[0].p;
-        // })
     }
 
-
+    getAccountValue(): Promise<number> {
+        return this.getAccount()
+        .then(data => data.last_equity);
+    }
 
     initialize(): Promise<void> {
         return Promise.resolve()
@@ -230,15 +228,16 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
             
             if (positions.length) {
                 positions.forEach(position => {
-                    //TODO: Added current position value
                     let pos = `**$${position.symbol}**\n
                     **Total P&L Percentage**: ${position.unrealized_pl * 100 / (position.qty * position.avg_entry_price)}%
                     **Unrealized P&L**: $${position.unrealized_pl}
                     **Intraday P&L Percentage**: ${position.unrealized_intraday_plpc * 100}%
                     **Intraday P&L Dollars**: $${position.unrealized_intraday_pl}
                     **Average Price**: $${position.avg_entry_price}
+                    **Current Price**: $${position.current_price}
                     **Share Count**: ${position.qty}
-                    **Total Position Size**: $${position.qty * position.avg_entry_price} 
+                    **Total Position Size**: $${position.qty * position.avg_entry_price}
+                    **Total Position Value**: $${position.qty * position.current_price}
                     `;
                     str = str.concat(`${pos}\n\n`);
                 });
@@ -261,16 +260,71 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
     }
 }
 
-export interface PhonyExchangeOptions {
+export interface BrokerRegistryOptions {
+    brokers: Broker<any, any, any>[];
+    logger: Logger;
+}
+
+export class BrokerRegistry implements Broker<any, any, any> {
+    private readonly brokers: Broker<any, any, any>[];
+    logger: Logger;
+    _dataProvider: TwelveDataDataSource;
+
+    constructor(options: BrokerRegistryOptions) {
+        this.brokers = options.brokers;
+        this.logger = options.logger;
+        this._dataProvider = new TwelveDataDataSource({
+            logger: this.logger
+        });
+    }
+
+    initialize(): Promise<void> {
+        return Promise.all(this.brokers.map(broker => broker.initialize()))
+        .then(() => { });
+    }
+
+    buy(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    sell(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    isMarketTime(): Promise<boolean> {
+        return isMarketOpen();
+    }
+
+    getPriceByTicker(ticker: string): Promise<number> {
+        return this._dataProvider.getTickerByPrice(ticker);
+    }
+
+    getAccountValue(): Promise<number> {
+        throw new NotSupported(`${this.constructor.name}#getAccountValue() is not supported.
+        Cannot return a value since multiple accounts are present.`);
+    }
+
+    getBuyingPower(): Promise<number> {
+        throw new NotSupported(`${this.constructor.name}#getBuyingPower() is not supported.
+        Cannot return a value since multiple accounts are present.`);
+    }
+
+    close(): Promise<void> {
+        return Promise.all(this.brokers.map(broker => broker.close()))
+        .then(() => { });
+    }
+}
+
+export interface PhonyBrokerOptions {
     logger: Logger;
     tickers?: { [key: string]: number } //To be used as a map for when calling getBuyingPower()
 }
 
-export class PhonyExchange implements Exchange<string, string, string> {
+export class PhonyBroker implements Broker<string, string, string> {
     tickers: { [key: string]: number };
     logger: Logger;
     
-    constructor(options: PhonyExchangeOptions) {
+    constructor(options: PhonyBrokerOptions) {
         this.logger = options.logger;
         this.tickers = options.tickers || {};
     }
@@ -287,7 +341,7 @@ export class PhonyExchange implements Exchange<string, string, string> {
     }
 
     getBuyingPower(): Promise<number> {
-        return Promise.resolve(99999999999999999999);
+        return Promise.resolve(9e12);
     }
 
     getPriceByTicker(ticker: string): Promise<number> {
@@ -300,6 +354,10 @@ export class PhonyExchange implements Exchange<string, string, string> {
 
     isMarketTime(): Promise<boolean> {
         return Promise.resolve(true);
+    }
+
+    getAccountValue(): Promise<number> {
+        return Promise.resolve(1e10);
     }
 
     sell(something: string): Promise<string> {

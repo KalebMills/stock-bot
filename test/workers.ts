@@ -1,5 +1,5 @@
 import { LiveDataStockWorker, QuoteEvent, TradeEvent } from '../lib/workers';
-import { AlpacasExchange } from '../lib/exchange';
+import { AlpacasBroker } from '../lib/broker';
 import { NotificationOptions, PhonyCommandClient, PhonyNotification } from '../lib/notification';
 import { DataSource, PhonyDataSource } from '../lib/data-source';
 import { PhonyMetricProvider } from '../lib/metrics';
@@ -12,7 +12,7 @@ let logger = util.createLogger({});
 
 let metric = new PhonyMetricProvider({ logger });
 
-let exchange = new AlpacasExchange({
+let broker = new AlpacasBroker({
     logger,
     keyId: (process.env['ALPACAS_API_KEY'] || ""),
     secretKey: (process.env['ALPACAS_SECRET_KEY'] || ""),
@@ -57,18 +57,18 @@ let datasource: PhonyDataSource<TradeEvent> = new PhonyDataSource<TradeEvent>({
 describe('#LiveDataStockWorker', () => {
 
     before(() => {
-        return Promise.all([ exchange.initialize(), notification.initialize(), datastore.initialize(), datasource.initialize() ]);
+        return Promise.all([ broker.initialize(), notification.initialize(), datastore.initialize(), datasource.initialize() ]);
     });
 
     after(() => {
-        return Promise.all([ exchange.close(), notification.close(), datastore.close(), datasource.close() ])
+        return Promise.all([ broker.close(), notification.close(), datastore.close(), datasource.close() ])
     })
 
     let worker: LiveDataStockWorker;
     it('Can construct an instance of LiveDataStockWorker', () => {
         worker = new LiveDataStockWorker({
             dataStore: datastore,
-            exchange,
+            broker,
             logger,
             id: 'TEST',
             notification,
@@ -160,6 +160,6 @@ describe('#LiveDataStockWorker', () => {
 
     it('Can close', () => {
         return worker.close()
-        .then(() => Promise.all([ exchange.close(), notification.close(), datastore.close(), datasource.close() ]))
+        .then(() => Promise.all([ broker.close(), notification.close(), datastore.close(), datasource.close() ]))
     });
 });

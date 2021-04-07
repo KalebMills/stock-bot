@@ -115,7 +115,7 @@ export const getMarketStatusOnDate = async (date: Date): Promise<MarketStatus> =
 export const getMarketHolidays = (): Promise<MarketHoliday[]> => {
     return axios.get('https://api.polygon.io/v1/marketstatus/upcoming', {
         params: {
-            apiKey: process.env['ALPACAS_API_KEY'] || "",
+            apiKey: process.env['POLYGON_API_KEY'] || "",
         }
     })
     .then((data: AxiosResponse<MarketHoliday[]>) => data.data)
@@ -147,7 +147,7 @@ export const minutesSinceOpen = (): number => {
 export const getTickerSnapshot = (ticker: string): Promise<Snapshot> => {
     return Axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`, {
         params: {
-            apiKey: process.env['ALPACAS_API_KEY'] || ""
+            apiKey: process.env['POLYGON_API_KEY'] || ""
         }
     })
     .then((data: AxiosResponse<{status: string, ticker: Snapshot}>) => {
@@ -210,14 +210,14 @@ export const isHighVolume = (ticker: string): Promise<boolean> => {
     })
 }
 
-export const getCurrentMarketStatus = (): Promise<string> => {
+export const isMarketOpen = (): Promise<boolean> => {
     return Axios.get(`https://api.polygon.io/v1/marketStatus/now`, {
         params: {
-            apiKey: process.env['ALPACAS_API_KEY'] || ""
+            apiKey: process.env['POLYGON_API_KEY'] || ""
         }
     })
     .then((data: AxiosResponse<any>) => {
-        return data.data.market;
+        return data.data.market === 'open';
     })
     .catch((err: Error) => Promise.reject(new RequestError(err.message)));
 }
@@ -254,6 +254,7 @@ export const extractTweetSignals = (tweet: string): TweetSignal[] => {
         }
     }
     //options trading not supported via alpacas
+    //TODO: Eventually, these signals should just be propagated so that other brokers that support options can use them
     const blacklist = ["PUT", "PUTS", "WARRANT", "WARRANTS", "LT"]
     const pos_actions = ["BUY"]
     const neg_actions = ["SOLD", "SELL", "STOPPED", "CLOSING"]

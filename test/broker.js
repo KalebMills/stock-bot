@@ -20,12 +20,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const winston = __importStar(require("winston"));
-const exchange_1 = require("../lib/exchange");
+const broker_1 = require("../lib/broker");
 const chai = __importStar(require("chai"));
-describe('#PhonyExchange', () => {
-    let exchange;
-    it('Can construct a PhonyExchange', () => {
-        exchange = new exchange_1.PhonyExchange({
+describe('#PhonyBroker', () => {
+    let broker;
+    it('Can construct a PhonyBroker', () => {
+        broker = new broker_1.PhonyBroker({
             logger: winston.createLogger({
                 transports: [new winston.transports.Console()],
             }),
@@ -33,32 +33,32 @@ describe('#PhonyExchange', () => {
                 'TEST': 100
             }
         });
-        chai.assert.instanceOf(exchange, exchange_1.PhonyExchange);
+        chai.assert.instanceOf(broker, broker_1.PhonyBroker);
     });
-    it('Can initialize PhonyExchange', () => {
-        return exchange.initialize();
+    it('Can initialize PhonyBroker', () => {
+        return broker.initialize();
     });
-    it('Can getBuyingPower from PhonyExchange', () => {
-        return exchange.getBuyingPower()
+    it('Can getBuyingPower from PhonyBroker', () => {
+        return broker.getBuyingPower()
             .then(buyingPower => {
             chai.assert.equal(buyingPower, 99999999999999999999);
         });
     });
     it('Can getPriceByTicker', () => {
-        return exchange.getPriceByTicker('TEST')
-            .then(price => chai.assert.equal(price, exchange.tickers['TEST']));
+        return broker.getPriceByTicker('TEST')
+            .then(price => chai.assert.equal(price, broker.tickers['TEST']));
     });
     it('Can check if isMarketTime', () => {
-        return exchange.isMarketTime()
+        return broker.isMarketTime()
             .then(isMarketTime => chai.assert.equal(isMarketTime, true));
     });
     it('Can buy', () => {
-        return exchange.buy('something');
+        return broker.buy('something');
     });
     it('Can sell', () => {
-        return exchange.sell('something');
+        return broker.sell('something');
     });
     it('Can close', () => {
-        return exchange.close();
+        return broker.close();
     });
 });

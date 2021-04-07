@@ -82,6 +82,15 @@ export class InsufficentFundsError extends Error {
     }
 }
 
+export class NotSupported extends Error {
+    constructor(message?: string) {
+        super(message);
+        Object.setPrototypeOf(this, NotSupported.prototype);
+        this.message = message || '';
+        this.name = this.constructor.name;
+    }
+}
+
 /**
  * When an axios GET request fails.
  */

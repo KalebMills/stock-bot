@@ -1,6 +1,6 @@
 import { Worker, IWorker, IWorkerOptions, LogLevel, Logger } from './base';
 import axios, { AxiosResponse } from 'axios';
-import { AlpacasExchange, Exchange } from './exchange';
+import { AlpacasBroker, Broker } from './broker';
 import * as Alpacas from '@master-chief/alpaca';
 import moment from 'moment';
 import momentTimezone from 'moment-timezone';
@@ -19,7 +19,7 @@ import { inspect } from 'util';
 export interface IStockWorkerOptions<T, TOrderInput, TOrder> extends IWorkerOptions<T> {
     purchaseOptions: IPurchaseOptions;
     // exchange: Exchange<TOrderInput, TOrderInput, TOrder>;
-    exchange: AlpacasExchange;
+    broker: AlpacasBroker;
     dataStore: IDataStore<T>;
     dataSource: IDataSource<T>;
     notification: INotification;
@@ -38,14 +38,14 @@ export interface IStockWorker<TInput, TOuput = any> extends IWorker<TInput, TOup
 export abstract class StockWorker<T> extends Worker<T> {
     datastore: IDataStore<T, DataStoreObject<T>>;
     datasource: IDataSource<T>;
-    exchange: AlpacasExchange;
+    broker: AlpacasBroker;
     notification: INotification;
     accountPercent: number;
     constructor(options: IStockWorkerOptions<T, Alpacas.PlaceOrder, Alpacas.Order>) { //TODO: Needs to be more generically typed
         super(options);
         this.datastore = options.dataStore;
         this.datasource = options.dataSource;
-        this.exchange = options.exchange;
+        this.broker = options.broker;
         this.notification = options.notification;
         this.metric = options.metric;
         this.accountPercent  = options.accountPercent;
@@ -80,7 +80,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                     volume: Number(ticker.currentVol),
                     message: `${ticker.ticker} is up ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
-                        exchange: this.exchange.constructor.name,
+                        broker: this.broker.constructor.name,
                         takeProfitAt: takeProfitDollarAmount,
                         cutLossesAt: stopLossDollarAmount,
                         //TODO: this will break for a yahoo data source, will need to fix
@@ -103,7 +103,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
                     price: ticker.price,
                     message: `${ticker.ticker} would not alert, it is ${changePercent.persuasion} ${changePercent.percentChange * 100}% from ${this.purchaseOptions.prevStockPriceOptions.unit} ${this.purchaseOptions.prevStockPriceOptions.measurement}s ago`,
                     additionaData: {
-                        'Exchange': this.exchange.constructor.name,
+                        'Broker': this.broker.constructor.name,
                         'DataSource': this.datasource.constructor.name,
                         'Action': ActionSignal.UNKNOWN
                     }
@@ -112,7 +112,7 @@ export class TopGainerNotificationStockWorker extends StockWorker<ITickerChange>
         })
     }
 
-    //TODO: This needs to be on the Exchange interface, this should not be something that a worker can do by itself.
+    //TODO: This needs to be on the Broker interface, this should not be something that a worker can do by itself.
     getPrevStockPrice(ticker: string, amount: number = 15,  unit: moment.DurationInputArg2 = 'minutes', limit: number = 100): Promise<number> {
         let nycTime = momentTimezone.tz(new Date().getTime(), 'America/New_York').subtract(amount, unit);
         let timestamp = nycTime.valueOf();
@@ -224,7 +224,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
         return this.datastore.get(ticker) //Fetch the previous quote
         .then(data => data as unknown as TradeEvent[]) //TODO: This is required because the DataStore interface only allows DataStoreObject, should change this
         .then((data: TradeEvent[]) => {
-            return this.exchange.getClock()
+            return this.broker.getClock()
             .then((d) => {
                 return [d.is_open, data] as [boolean, TradeEvent[]]; //Not sure why I need to do this, the next then block interprets it poorly
             })            
@@ -330,7 +330,7 @@ export class LiveDataStockWorker extends StockWorker<TradeEvent> {
                                 price: currTrade.p,
                                 message: `Ticker ${ticker} has a rate of increase ${changePercentPerMinute.toFixed(2)}% per minute.`,
                                 additionaData: {
-                                    'Exchange': this.exchange.constructor.name,
+                                    'Broker': this.broker.constructor.name,
                                     'DataSource': this.datasource.constructor.name,
                                     'Measure Time': `${(((currTrade.t / 1000) - (prevTrade.t / 1000)) / 60).toFixed(2)} Minutes`,
                                     'Previous Price': `${prevTrade.p}`,
@@ -467,10 +467,10 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     const ticker = signal.ticker;
                     notificationMessage.additionaData!['Action'] = signal.action;
                     returnPromise
-                    .then(() => this.exchange.getPriceByTicker(ticker))
+                    .then(() => this.broker.getPriceByTicker(ticker))
                     .then((price: number) => {
                         if(signal.action == ActionSignal.BUY) {
-                            return Promise.all([ this.exchange.sizePosition(ticker, this.accountPercent, signal.sizing), this.exchange.getBuyingPower() ])
+                            return Promise.all([ this.broker.sizePosition(ticker, this.accountPercent, signal.sizing), this.broker.getBuyingPower() ])
                             .then(([ qty, buyingPower]: [number, number]) => {
                                 const TOTAL_COST: number = new Decimal(qty * price).toNumber();
                                 this.logger.log(LogLevel.INFO, `Buying ${qty} shares of ${ticker} for ${TOTAL_COST}. We have ${buyingPower} Buying Power`);
@@ -478,7 +478,7 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                                 notificationMessage.additionaData!['Action'] = ActionSignal.BUY;
                                 
                                 if (buyingPower > TOTAL_COST) {
-                                    return this.exchange.placeOrder({
+                                    return this.broker.placeOrder({
                                         symbol: ticker,
                                         qty: Math.ceil(qty),
                                         side: 'buy',
@@ -494,12 +494,12 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                             })
                         } else if(signal.action == ActionSignal.SELL) {
                             this.logger.log(LogLevel.INFO, `Got SELL action for ${ticker}`);
-                            return this.exchange.getPositionQty(ticker)
+                            return this.broker.getPositionQty(ticker)
                             .then((qty: number) => {
                                 notificationMessage.additionaData!['Action'] = ActionSignal.SELL;
                                 this.logger.log(LogLevel.INFO, `Selling ${qty} shares of ${ticker}`);
 
-                                return this.exchange.placeOrder({
+                                return this.broker.placeOrder({
                                     symbol: ticker,
                                     qty: qty,
                                     side: 'sell',
