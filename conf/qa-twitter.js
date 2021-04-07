@@ -71,6 +71,12 @@ const prometheus_registry = new PrometheusMetricRegistry({
         description: 'A metric to track the byte size of the memory datastore',
         type: SUPPORTED_PROMETHEUS_METRIC_TYPES.GAUGE,
         labels: []
+    }, {
+        name: 'mentions',
+        metric_name: 'mentions',
+        description: 'A metric to track mentions of tickers across social media accounts',
+        type: SUPPORTED_PROMETHEUS_METRIC_TYPES.COUNTER,
+        labels: ['ticker']
     }]
 });
 
@@ -110,10 +116,11 @@ const datasource = new TwitterDataSource({
     commandClient: DISCORD_CLIENT,
     validationSchema: joi.object({}),
     twitterAccounts: [
-        /*{
-        id: '1054561163843751936', //@ripster47
-        type: TwitterAccountType.FAST_POSITION
-    }, */ {
+    {
+        id: '1054561163843751936',
+        name: 'ripster47',
+        type: TwitterAccountType.TRACKER
+    }, {
         id: '1363664893975678978',
         name: 'CSCproALERT',
         type: TwitterAccountType.SWING_POSITION
@@ -121,7 +128,7 @@ const datasource = new TwitterDataSource({
     }, {
         id: '1350915232227594240',
         name: 'CoiledSpringPro',
-        type: TwitterAccountType.WATCHLIST //Should go to 
+        type: TwitterAccountType.WATCHLIST
     }],
     twitterKey: (process.env['TWITTER_API_KEY']),
     twitterSecret: (process.env['TWITTER_API_SECRET']),

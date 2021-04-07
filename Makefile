@@ -12,8 +12,6 @@ test-only:
 newest-tickers:
 	node bin/fetch-latest-tickers.js
 
-
-
 #Service Management Commands
 .PHONY: start-bot
 start-bot:
@@ -35,3 +33,16 @@ stop-bot:
 .PHONY: restart-bot
 restart-bot:
 	pm2 restart $(SERVICE_NAME)
+
+.PHONY: start-prometheus
+start-prometheus:
+	docker run \
+		-p 9090:9090 \
+		-d \
+		-v $(PWD)/resources/prometheus.yml:/etc/prometheus/prometheus.yml \
+		--name prometheus \
+		prom/prometheus
+
+.PHONY: stop-prometheus
+stop-prometheus:
+	docker rm -f prometheus
