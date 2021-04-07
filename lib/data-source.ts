@@ -390,6 +390,7 @@ export enum TwitterAccountType {
     FAST_POSITION = 'FAST_POSITION',
     OPTIONS_POSITION = 'OPTIONS_POSITION',
     WATCHLIST = 'WATCHLIST',
+    TRACKER = 'TRACKER', //Generic name to indicate this account is used to track information
     UNKNOWN = 'UNKNOWN_POSITION'
 }
 
@@ -773,6 +774,76 @@ export class TwelveDataDataSource implements IInitializable, ICloseable {
     }
 }
 
+export interface PrometheusDataSourceOptions {
+    prometheusHost: string; //Includes port
+    logger: Logger;
+}
+
+interface PrometheusInstantQueryHTTPResponse {
+    status: "success" | "error";
+    errorType?: string;
+    error?: string;
+    data: {
+        resultType: string;
+        result: {
+            metric: {
+                __name__: string;
+                job: string;
+                instance: string;
+            },
+            value: [number, string];
+        }[];
+    }
+}
+
+/*
+    TODO:
+    Since this class, and the TwelveDataDatasource class are DataSources,
+    but not in the meaning of our DataSource interface, perhaps we should
+    consider making a separate interface for consuming data in a non-linear
+    way. The DataSource interface was created as a construct in the flow for 
+    StockService, so data could be processed through it, then passed to the 
+    Workers .process() function. With these 2 classes, we are trying to use
+    them as a way of getting data during processing (in the .process function()), not
+    in the preProcess function of the Worker. For now, we will construct such
+    datasources in the worker constructor, until there is a better solution.
+*/
+
+export class PrometheusDataSource implements IInitializable, ICloseable {
+    private host: string;
+    private logger: Logger;
+
+    constructor(options: PrometheusDataSourceOptions) {
+        this.host = options.prometheusHost;
+        this.logger = options.logger;
+    }
+
+    initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    //For now, this only supports Counter, Gauge
+    getMetricByName(metric: string): Promise<number> {
+        return axios.get<PrometheusInstantQueryHTTPResponse>(`http://${this.host}/api/v1/query`, {
+            params: {
+                'query': metric
+            }
+        })
+        .then((data) => {
+            if (data.data.status === 'success') {
+                return parseInt(data.data.data.result[0].value[1]);
+            } else {
+                throw new InvalidDataError(`Error Type: ${data.data.errorType!} -- Error: ${data.data.error!}`);
+            }
+        })
+    }
+
+    close(): Promise<void> {
+        return Promise.resolve();
+    }
+}
+
+
 export interface PhonyDataSourceOptions<T> extends DataSource<T> {
     returnData: T;
 }
@@ -788,3 +859,16 @@ export class PhonyDataSource<T> extends DataSource<T> {
         return Promise.resolve([this.returnData]);
     }
 }
+
+let prome = new PrometheusDataSource({
+    logger: U.createLogger({}),
+    prometheusHost: '142.93.191.48:9090'
+})
+
+prome.initialize()
+.then(() => {
+    return prome.getMetricByName('mentions')
+        .then(totalMentions => {
+        console.log(`Total Mentions = ${totalMentions}`)
+    })
+})
