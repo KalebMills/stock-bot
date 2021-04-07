@@ -76,7 +76,7 @@ const prometheus_registry = new PrometheusMetricRegistry({
         metric_name: 'mentions',
         description: 'A metric to track mentions of tickers across social media accounts',
         type: SUPPORTED_PROMETHEUS_METRIC_TYPES.COUNTER,
-        labels: ['ticker']
+        labels: ['ticker', 'account']
     }]
 });
 

@@ -535,7 +535,8 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
                     'mentions': {
                         value: 1,
                         labels: {
-                            'ticker': t
+                            'ticker': t,
+                            'account': input.account_name
                         }
                     }
                 });
