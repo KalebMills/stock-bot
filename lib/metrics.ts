@@ -172,7 +172,7 @@ export class PrometheusCounterMetric implements PrometheusMetric {
     push(options: {value: number, labels: { [labelName: string]: string }} = { labels: {}, value: 1 }): void {
         const { value, labels } = options;
         if (isRegisteredLabels(labels, this.labels)) {
-            this.counter.labels(...Object.keys(this.labels)).inc(value);
+            this.counter.labels(...Object.values(labels)).inc(value);
         } else {
             this.counter.inc(value);
         }
@@ -250,7 +250,7 @@ export class PrometheusHistogramMetric implements PrometheusMetric {
         const { value, labels } = options;
 
         if (labels && isRegisteredLabels(labels, this.labels)) {
-            this.histogram.labels(...this.labels).observe(value);
+            this.histogram.labels(...Object.values(labels)).observe(value);
         } else {
             this.histogram.observe(value);
         }
