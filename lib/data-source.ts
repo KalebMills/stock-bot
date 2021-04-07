@@ -859,16 +859,3 @@ export class PhonyDataSource<T> extends DataSource<T> {
         return Promise.resolve([this.returnData]);
     }
 }
-
-let prome = new PrometheusDataSource({
-    logger: U.createLogger({}),
-    prometheusHost: '142.93.191.48:9090'
-})
-
-prome.initialize()
-.then(() => {
-    return prome.getMetricByName('mentions')
-        .then(totalMentions => {
-        console.log(`Total Mentions = ${totalMentions}`)
-    })
-})
