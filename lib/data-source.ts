@@ -619,18 +619,41 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
                 `https://api.twitter.com/2/users/${userId}/tweets?expansions=attachments.media_keys&media.fields=url&tweet.fields=in_reply_to_user_id`,
                 this.twitterAccessToken,
                 this.twitterAccessSecret,
-                function (e, data, res) {
+                (e, data, res) => {
                     if (e) {
                         reject(e.data)
                     }
 
-                    let formatted: TwitterTimelineResponse =  JSON.parse(data?.toString()!);
+                    this.logger.log(LogLevel.INFO, `Data from scrape: ${inspect(data)}`)
+
+                    let formatted: TwitterTimelineResponse;
+
+                    try {
+                        if (data && data?.hasOwnProperty('data')) {
+                            formatted = JSON.parse(data?.toString()!);
+                        } else {
+                            throw new InvalidDataError('Received no information in data')
+                        }
+                    } catch (err) {
+                        formatted = {
+                            data: [],
+                            includes: {
+                                media: []
+                            },
+                            meta: {
+                                oldest_id: '',
+                                newest_id: '',
+                                next_token: '',
+                                result_count: 0
+                            }
+                        };
+                    }
 
                     // Only a Partial for typing purposes
                     let newObj: Partial<TwitterTweetListWithAccountId> = {};
 
                     //@ts-ignore
-                    delete formatted.data['attachments'];
+                    (formatted.hasOwnProperty('data') && formatted.data.hasOwnProperty('attachments')) && delete formatted.data['attachments'];
 
                     newObj['tweets'] = [];
                     newObj['accountId'] = userId;
