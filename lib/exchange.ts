@@ -124,7 +124,7 @@ export class AlpacasExchange extends Alpacas.AlpacaClient implements Exchange<Al
                         type: 'stop',
                         side: 'sell',
                         symbol,
-                        qty: shareQty,
+                        qty: Math.floor(shareQty),
                         time_in_force: 'gtc',
                         stop_price: parseInt(price)
                     });

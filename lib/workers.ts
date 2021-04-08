@@ -452,11 +452,10 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             socialMediaMessage: true
         }
 
-
+        let signals: TweetSignal[] = extractTweetSignals(message);
         const returnPromise: Promise<void> = Promise.resolve();
         
         if (type === TwitterAccountType.SWING_POSITION) {
-            let signals: TweetSignal[] = extractTweetSignals(message);
 
             this.logger.log(LogLevel.INFO, `Got signals for ${TwitterAccountType.SWING_POSITION} -- Signals: ${JSON.stringify(signals)}`);
 
@@ -529,7 +528,24 @@ export class SocialMediaWorker extends StockWorker<SocialMediaOutput> {
             this.logger.log(LogLevel.INFO, `Creating an alert for a Options Position`);
         } else if (type === TwitterAccountType.WATCHLIST) {
             returnPromise.then(() => this.notification.notify(socialMediaMessage));
+        } else if (type === TwitterAccountType.TRACKER) {            
+            for (let signal of signals) {
+                let t = signal.ticker;
+                this.metric.push({
+                    'mentions': {
+                        value: 1,
+                        labels: {
+                            'ticker': t,
+                            'account': input.account_name
+                        }
+                    }
+                });
+
+                returnPromise.then(() => this.notification.notify(socialMediaMessage));
+            }
         } else {
+            
+        
             return Promise.reject(new exception.InvalidDataError(`${this.constructor.name}#process received an unsupported AccountType: ${type}`));
         }
 
