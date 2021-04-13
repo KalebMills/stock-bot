@@ -116,11 +116,11 @@ const datasource = new TwitterDataSource({
     commandClient: DISCORD_CLIENT,
     validationSchema: joi.object({}),
     twitterAccounts: [
-    {
+    /*{
         id: '1054561163843751936',
         name: 'ripster47',
         type: TwitterAccountType.TRACKER
-    }, {
+    }, */{
         id: '1363664893975678978',
         name: 'CSCproALERT',
         type: TwitterAccountType.SWING_POSITION

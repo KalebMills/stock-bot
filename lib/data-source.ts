@@ -590,6 +590,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
             });
         } else {
             input.forEach(account => {
+                this.logger.log(LogLevel.INFO, inspect(account));
                 this.prevIds.push(account.tweets[0].id);
                 latestTweets.push({ accountId: account.accountId, tweets: [ account.tweets[0] ] });
             })
@@ -625,16 +626,10 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
                         reject(e.data)
                     }
 
-                    this.logger.log(LogLevel.INFO, `Data from scrape: ${inspect(data)}`)
-
                     let formatted: TwitterTimelineResponse;
 
                     try {
-                        if (data && data?.hasOwnProperty('data')) {
-                            formatted = JSON.parse(data?.toString()!);
-                        } else {
-                            throw new InvalidDataError('Received no information in data')
-                        }
+                        formatted = JSON.parse(data!.toString()!);
                     } catch (err) {
                         formatted = {
                             data: [],
@@ -679,6 +674,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
                             urls: tweetUrls
                         });
                     });
+
 
                     resolve(newObj as TwitterTweetListWithAccountId);
                 }
