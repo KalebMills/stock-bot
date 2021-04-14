@@ -141,15 +141,9 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.logger.log(LogLevel.INFO, `Checking if it is market time..`);
         return isMarketTime()
         .then((isMarketTime: boolean) => {
-            if (isMarketTime) {
-                //NOTE: worker.start() is idempotent
-                for (let worker of this.workers.values()) {
-                    worker.start();
-                }
-            } else {
-                for (let worker of this.workers.values()) {
-                    worker.stop();
-                }
+            for (let worker of this.workers.values()) {
+                //NOTE: start() and stop() are idempotent
+                isMarketTime ? worker.start() : worker.stop();
             }
         })
     }
