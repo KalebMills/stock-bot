@@ -10,6 +10,7 @@ import { CommandClient, INotification } from './notification';
 import * as W from './workers';
 import { IDataStore } from './data-store';
 import { IDiagnostic } from './diagnostic';
+import { isMarketTime } from './util';
 
 
 export const StockBotOptionsValidationSchema = joi.object({
@@ -35,7 +36,8 @@ export const StockBotOptionsValidationSchema = joi.object({
     concurrency: joi.number().required(),
     logger: joi.object().required(),
     accountPercent: joi.number().required(),
-    commandClient: joi.object().required()
+    commandClient: joi.object().required(),
+    runOnlyInMarketTime: joi.boolean().required()
      //Winston is not actually a class
 });
 
@@ -61,6 +63,7 @@ export interface IStockServiceOptions extends IServiceOptions {
     commandClient: CommandClient;
     accountPercent: number;
     mainWorker: W.IStockWorker<BaseStockEvent>; //This is how we pass different algorithms to the service
+    runOnlyInMarketTime: boolean;
 }
 
 export interface IPurchaseOptions {
@@ -91,6 +94,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     notification: INotification;
     commandClient: CommandClient;
     accountPercent: number;
+    runOnlyInMarketTime: boolean;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -104,6 +108,14 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.mainWorker = options.mainWorker;
         this.commandClient = options.commandClient;
         this.accountPercent = options.accountPercent;
+        this.runOnlyInMarketTime = options.runOnlyInMarketTime;
+
+        if (this.runOnlyInMarketTime) {
+            setTimeout(() => {
+                this.handleMarketTimeProcessing()
+                .catch(this.exceptionHandler)
+            }, 60000); //Check every minute
+        }
     }
 
     initialize(): Promise<void> {
@@ -125,10 +137,23 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         });
     }
 
+    handleMarketTimeProcessing = (): Promise<void> => {
+        this.logger.log(LogLevel.INFO, `Checking if it is market time..`);
+        return isMarketTime()
+        .then((isMarketTime: boolean) => {
+            for (let worker of this.workers.values()) {
+                //NOTE: start() and stop() are idempotent
+                isMarketTime ? worker.start() : worker.stop();
+            }
+        })
+    }
 
     /*
         All this function does is verify that the processable work array has data in it.. this is later on called by the Worker class before process
         This should simply be a function for fetching work in a service, the only time a worker should have it process method invoked, is if there is data to supply to it.
+
+        NOTE: preProcess is what workers call before calling their process() function, by checking if market time here,
+        we can pause processing of the workers
     */
 
     preProcess = async (): Promise<BaseStockEvent> => {
@@ -247,7 +272,8 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
     
     close(): Promise<void> {
-        return Promise.all([ this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close(), this.commandClient.close() ])
-        .then(() => super.close());
+        return super.close()
+        .then(() => Promise.all([this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close(), this.commandClient.close()]))
+        .then(() => { });
     }
 }

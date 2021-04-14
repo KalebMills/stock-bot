@@ -154,7 +154,7 @@ const diagnostic = new DiscordDiagnosticSystem({
 });
 
 // const diagnostic = new PhonyDiagnostic({
-    
+
 // });
 
 
@@ -199,7 +199,8 @@ const serviceOptions = {
     notification,
     metric: prometheus_metric_provider,
     accountPercent: 0.1,
-    commandClient: DISCORD_CLIENT
+    commandClient: DISCORD_CLIENT,
+    runOnlyInMarketTime: true
 };
 
 

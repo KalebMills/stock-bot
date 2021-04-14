@@ -186,6 +186,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
     }
 
     stop(): void {
+        this.logger.log(LogLevel.INFO, `Worker ${this.id}#stop():INVOKED`)
         this.isRunning = false;
     }
 
@@ -221,10 +222,13 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
     abstract process(options: TInput): Promise<void>;
 
     close(): Promise<void> {
+        this.logger.log(LogLevel.INFO, `Worker ${this.id}#close():INVOKED`)
         //Since we do not manage a process, no need to wait for the process to be complete;
         this.isRunning = false;
         return BPromise.all([ this._pendingProcess ])
         .then(() => this.logger.log(LogLevel.INFO, `Worker ${this.id}#close():SUCCESS`))
-        .then(() => {})
+        .then(() => {
+                this.isClosed = true;
+        })
     }
 }

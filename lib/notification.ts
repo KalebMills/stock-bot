@@ -143,20 +143,15 @@ export class DiscordClient extends EventEmitter implements CommandClient {
     }
 
     private _handleIncomingMessage = (message: discord.Message): void => {
-        console.log(`Incoming Message: ${message.content}`)
         let isCommand = message.content.trim().startsWith(this.commandPrefix);
-
-        console.log(`is command: ${isCommand} -- prefix = ${this.commandPrefix}`);
 
         if (isCommand) {
             let command: string = message.content.split(" ")[0].substring(1);
             let content: string = message.content.split(" ").slice(1).join(" ") || "";
 
-            console.log(JSON.stringify(Object.keys(this.commandHandlers)));
-
             if (this.commandHandlers.hasOwnProperty(command)) {
-                console.log(`Command has handler == true`)
                 let handler = this.commandHandlers[command].handler;
+
                 handler(content)
                 .then((data: string) => this.sendMessage(data, message))
                 .catch(this.errorHandler)
