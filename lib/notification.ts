@@ -158,31 +158,7 @@ export class DiscordClient extends EventEmitter implements CommandClient {
                 console.log(`Command has handler == true`)
                 let handler = this.commandHandlers[command].handler;
                 handler(content)
-                .then((data: string) => {
-                    if (data.length > 2040) {
-                        let firstData = data.slice(0, 2040);
-                        let next = (data.slice(2040, data.length));
-
-                        let embed = new discord.MessageEmbed();
-
-                        embed.setDescription(firstData);
-                        embed.setColor(color());
-
-                        return message.reply(embed)
-                        .then(() => {
-                            //Bad, should have a sendMessage function that can be called recursively
-                            embed.setDescription(next);
-                            return message.reply(embed);
-                        });
-                    }
-
-                    let embed = new discord.MessageEmbed();
-
-                    embed.setDescription(data);
-                    embed.setColor(color());
-
-                    return message.reply(embed);
-                })
+                .then((data: string) => this.sendMessage(data, message))
                 .catch(this.errorHandler)
             } else {
                 message.reply(`${command} is not a command, please see !help for assistance`)
@@ -191,6 +167,29 @@ export class DiscordClient extends EventEmitter implements CommandClient {
         } else {
             return;
         }
+    }
+
+    sendMessage = (body: string, message: discord.Message): Promise<void> => {
+        let embed = new discord.MessageEmbed();
+
+        if (body.length > 2040) {
+            let firstData = body.slice(0, 2040);
+
+            //Usually bad, but we intentionally do this.
+            body = (body.slice(2040, body.length));
+
+            embed.setDescription(firstData);
+            embed.setColor(color());
+
+            return message.reply(embed)
+            .then(() => this.sendMessage(body, message));
+        }
+
+        embed.setDescription(body);
+        embed.setColor(color());
+
+        return message.reply(embed)
+        .then(() => { });
     }
 
     getClient(): discord.Client {
