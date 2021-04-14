@@ -114,7 +114,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             setTimeout(() => {
                 this.handleMarketTimeProcessing()
                 .catch(this.exceptionHandler)
-            }, 10000);
+            }, 60000); //Check every minute
         }
     }
 
