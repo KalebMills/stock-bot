@@ -143,13 +143,10 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         .then((isMarketTime: boolean) => {
             if (isMarketTime) {
                 //NOTE: worker.start() is idempotent
-                console.log(`IsMarketTime, no problem, letting the workers run`)
-                // return Object.values(this.workers).forEach((worker: IWorker<any, any>) => worker.start());
                 for (let worker of this.workers.values()) {
                     worker.start();
                 }
             } else {
-                console.log(`IsNotMarketTime, stopping workers`)
                 for (let worker of this.workers.values()) {
                     worker.stop();
                 }
