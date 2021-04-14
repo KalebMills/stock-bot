@@ -7,6 +7,7 @@ import { MarketHoliday, PolygonMarketHolidays } from '../types/polygonMarketHoli
 import Axios from 'axios';
 import { Snapshot } from '../types';
 import moment from 'moment';
+import { inspect } from 'util';
 
 export interface IDeferredPromise {
     resolve: Function;
@@ -210,16 +211,19 @@ export const isHighVolume = (ticker: string): Promise<boolean> => {
     })
 }
 
-export const getCurrentMarketStatus = (): Promise<string> => {
-    return Axios.get(`https://api.polygon.io/v1/marketStatus/now`, {
+export const isMarketTime = (): Promise<boolean> => {
+    return Axios.get(`https://api.polygon.io/v1/marketstatus/now`, {
         params: {
-            apiKey: process.env['ALPACAS_API_KEY'] || ""
+            apiKey: process.env['POLYGON_API_KEY'] || ""
         }
     })
-    .then((data: AxiosResponse<any>) => {
-        return data.data.market;
-    })
-    .catch((err: Error) => Promise.reject(new RequestError(err.message)));
+        .then((data: AxiosResponse<any>) => {
+            return data.data.market == 'open';
+        })
+        .catch((err: Error) => {
+            console.log(inspect(err));
+            throw new RequestError(err.message);
+    });
 }
 
 export class Timer {

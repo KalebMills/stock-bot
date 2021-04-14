@@ -145,17 +145,17 @@ const datasource = new TwitterDataSource({
 
 const datastore = new MemoryDataStore({ logger, metric: prometheus_metric_provider });
 
-const diagnostic = new DiscordDiagnosticSystem({
-    logger,
-    token: (process.env['DISCORD_API_TOKEN'] || ""),
-    guildId: (process.env['DISCORD_GUILD_ID'] || ""),
-    channelName: 'service-diagnostics',
-    client: DISCORD_CLIENT
-});
-
-// const diagnostic = new PhonyDiagnostic({
-    
+// const diagnostic = new DiscordDiagnosticSystem({
+//     logger,
+//     token: (process.env['DISCORD_API_TOKEN'] || ""),
+//     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
+//     channelName: 'service-diagnostics',
+//     client: DISCORD_CLIENT
 // });
+
+const diagnostic = new PhonyDiagnostic({
+
+});
 
 
 // const exchange = new PhonyExchange({
@@ -199,7 +199,8 @@ const serviceOptions = {
     notification,
     metric: prometheus_metric_provider,
     accountPercent: 0.1,
-    commandClient: DISCORD_CLIENT
+    commandClient: DISCORD_CLIENT,
+    runOnlyInMarketTime: true
 };
 
 

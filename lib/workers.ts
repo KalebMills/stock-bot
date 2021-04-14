@@ -41,6 +41,7 @@ export abstract class StockWorker<T> extends Worker<T> {
     exchange: AlpacasExchange;
     notification: INotification;
     accountPercent: number;
+    
     constructor(options: IStockWorkerOptions<T, Alpacas.PlaceOrder, Alpacas.Order>) { //TODO: Needs to be more generically typed
         super(options);
         this.datastore = options.dataStore;
