@@ -1,8 +1,10 @@
 import BPromise from 'bluebird';
+import { inspect } from 'util';
 import * as uuid from 'uuid';
 import * as winston from 'winston';
+import { DefaultError, ServiceClosed } from './exceptions';
 import { IMetricProvider } from './metrics';
-import { Timer } from './util';
+import { isMarketTime, Timer } from './util';
 
 export type Logger = winston.Logger;
 
@@ -44,6 +46,7 @@ export interface IService<IWorker> extends IInitializable, ICloseable {
     exceptionHandler(err: Error): void;
     logger: Logger;
     workers: Map<string, IWorker>;
+    isServiceClosed(): boolean;
 }
 
 export interface IServiceOptions<T = any> {
@@ -72,6 +75,51 @@ export interface IWorker<TInput, TOutput = any> extends IInitializable, ICloseab
     run(): void;
     process(options: TInput): Promise<TOutput>;
     close(): Promise<void>; 
+}
+
+export interface StockServiceManagerOptions {
+    logger: Logger;
+}
+
+export interface ServiceManager {
+    monitorService(service: IService<IWorker<any>>): void;
+}
+
+export class StockServiceManager implements ServiceManager {
+    private logger: Logger;
+    isMarketTime: boolean;
+
+    constructor(options: StockServiceManagerOptions) {
+        this.logger = options.logger;
+        this.isMarketTime = false;
+
+        setTimeout(() => {
+            this.isMarketTime = true;
+        }, 30000);
+    }
+
+    monitorService(service: IService<IWorker<any>>): void {
+
+        setTimeout(() => {
+            // isMarketTime().then(isMarketTime => {
+            BPromise.try(() => {
+                if (this.isMarketTime) {
+                    if (service.isServiceClosed()) {
+                        service.initialize()
+                        .catch(service.exceptionHandler);
+                    }
+                } else {
+                    if (!service.isServiceClosed()) {
+                        service.close()
+                        .catch(service.exceptionHandler);
+                    }
+                }
+            }).catch(err => {
+                console.error(`${this.constructor.name}#monitorService():ERROR`, inspect(err));
+            })
+            .finally(() => this.monitorService(service))
+        }, 10000); //Run every 10 seconds
+    }
 }
 
 
@@ -128,6 +176,10 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
 
     abstract exceptionHandler(err: Error): void;
 
+    isServiceClosed(): boolean {
+        return this.isClosed;
+    }
+
     close(): Promise<void> {
         this.isClosed = true;
 
@@ -146,8 +198,10 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
         return Promise.all(pendingWork)
         .then(() => this.logger.log(LogLevel.INFO, `${this.constructor.name}#shutdown():SUCCESS`))
         .then(() => {})
-        .catch((err) => {
-            this.logger.log(LogLevel.ERROR, `${this.constructor.name}#shutdown():ERROR - ${err}`);
+        .catch((err: DefaultError) => {
+            if (err.name != ServiceClosed.name) {
+                this.logger.log(LogLevel.ERROR, `${this.constructor.name}#shutdown():ERROR - ${err}`);
+            }
             // Swallow error intentionally, allow service to close even with an error;
         });
     }
@@ -216,6 +270,8 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
                 });
                 this.run()
             });
+        } else {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#run():INVOKED - Worker is in a paused or stopped state.`);
         }
     }
 
@@ -225,10 +281,11 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
         this.logger.log(LogLevel.INFO, `Worker ${this.id}#close():INVOKED`)
         //Since we do not manage a process, no need to wait for the process to be complete;
         this.isRunning = false;
-        return BPromise.all([ this._pendingProcess ])
-        .then(() => this.logger.log(LogLevel.INFO, `Worker ${this.id}#close():SUCCESS`))
-        .then(() => {
-                this.isClosed = true;
+        this.isClosed = true;
+        return BPromise.all([this._pendingProcess])
+            .then(() => this.logger.log(LogLevel.INFO, `Worker ${this.id}#close():SUCCESS`))
+            .then(() => {
+            
         })
     }
 }

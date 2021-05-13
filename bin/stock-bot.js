@@ -22,6 +22,11 @@ else {
         console.log(chalk_1.default.red(`An unhandled error occurred, ${err}`));
         return service.close();
     });
+    //TODO: Make the market time hook here, this way it can easily be controlled by starting and stopping the entire service. No need for the internals of the service to handle this.
+    // let serviceManager = new StockServiceManager({
+    //     logger: createLogger({})
+    // });
+    // serviceManager.monitorService(service);
 }
 //Catches unhandled Promise errors
 // process.on('unhandledRejection', () => {

@@ -94,7 +94,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     notification: INotification;
     commandClient: CommandClient;
     accountPercent: number;
-    runOnlyInMarketTime: boolean;
+    // runOnlyInMarketTime: boolean;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -108,17 +108,18 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.mainWorker = options.mainWorker;
         this.commandClient = options.commandClient;
         this.accountPercent = options.accountPercent;
-        this.runOnlyInMarketTime = options.runOnlyInMarketTime;
+        // this.runOnlyInMarketTime = options.runOnlyInMarketTime;
 
-        if (this.runOnlyInMarketTime) {
-            setTimeout(() => {
-                this.handleMarketTimeProcessing()
-                .catch(this.exceptionHandler)
-            }, 60000); //Check every minute
-        }
+        // if (this.runOnlyInMarketTime) {
+        //     setTimeout(() => {
+        //         this.handleMarketTimeProcessing()
+        //         .catch(this.exceptionHandler)
+        //     }, 60000); //Check every minute
+        // }
     }
 
     initialize(): Promise<void> {
+        this.isClosed = false;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
         return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize(), this.commandClient.initialize() ])
         .then(() => super.initialize())
@@ -137,16 +138,16 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         });
     }
 
-    handleMarketTimeProcessing = (): Promise<void> => {
-        this.logger.log(LogLevel.INFO, `Checking if it is market time..`);
-        return isMarketTime()
-        .then((isMarketTime: boolean) => {
-            for (let worker of this.workers.values()) {
-                //NOTE: start() and stop() are idempotent
-                isMarketTime ? worker.start() : worker.stop();
-            }
-        })
-    }
+    // handleMarketTimeProcessing = (): Promise<void> => {
+    //     this.logger.log(LogLevel.INFO, `Checking if it is market time..`);
+    //     return isMarketTime()
+    //     .then((isMarketTime: boolean) => {
+    //         for (let worker of this.workers.values()) {
+    //             //NOTE: start() and stop() are idempotent
+    //             isMarketTime ? worker.start() : worker.close();
+    //         }
+    //     })
+    // }
 
     /*
         All this function does is verify that the processable work array has data in it.. this is later on called by the Worker class before process
@@ -156,7 +157,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         we can pause processing of the workers
     */
 
-    preProcess = async (): Promise<BaseStockEvent> => {
+    preProcess = (): Promise<BaseStockEvent> => {
         this.logger.log(LogLevel.TRACE, `${this.constructor.name}#preProcess():CALLED`)
 
         this.metric.push({
@@ -186,43 +187,39 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             // this.logger.log(LogLevel.INFO, `this.processables.length = ${this.processables.length}`);
             //Resupply the the work array, and try to process work again
             return this.fetchWork()
-            .then((tickers: BaseStockEvent[]) => {
-                //This filters out tickers that are timed out.
-                const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
-                this.processables = tickers.filter((ticker: BaseStockEvent) => !keys.includes(ticker.ticker));
-                this.logger.log(LogLevel.TRACE, `this.processables.length after filter = ${this.processables.length}`)
+                .then((tickers: BaseStockEvent[]) => {
+                    //This filters out tickers that are timed out.
+                    const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
+                    this.processables = tickers.filter((ticker: BaseStockEvent) => !keys.includes(ticker.ticker));
+                    this.logger.log(LogLevel.TRACE, `this.processables.length after filter = ${this.processables.length}`)
 
-                //TODO: The current problem we have here, is that if we have multiple workers, when `this.preProcess()` is called, 
-                // Each worker will then call the Yahoo API again, and refill the `this.processable` Array with all of the same tickers. 
-                //While the filter above should handle this case, it's bad practice to be calling the API that many times, just to be getting the same value for each call.
-                //We should instead create a `WorkerRefill` Promise to only allow one Yahoo API fetch at a time.
+                    //TODO: The current problem we have here, is that if we have multiple workers, when `this.preProcess()` is called, 
+                    // Each worker will then call the Yahoo API again, and refill the `this.processable` Array with all of the same tickers. 
+                    //While the filter above should handle this case, it's bad practice to be calling the API that many times, just to be getting the same value for each call.
+                    //We should instead create a `WorkerRefill` Promise to only allow one Yahoo API fetch at a time.
 
-                //NOTE: See TODO in below block. We should also create a "WorkerRefill Promise"
+                    //NOTE: See TODO in below block. We should also create a "WorkerRefill Promise"
 
-                //NOTE: Also, this if statement should also contain logic to verify that all of the tickers fetched are not also timed out. If that is the case, we should do something like return Promise.all(this.timedoutTickerPromises)
-                if(!(this.processables.length > 0)) {
-                    //TODO: This logic should be moved to _fetchTickerInfo
-                    //NOTE: This is some edgecase code
-                    const keys = Array.from([...this.datasource.timedOutTickers.keys()]);     
-                    if(this.processables.some((ticker: BaseStockEvent) => !keys.includes(ticker.ticker))) {
-                        this.logger.log(LogLevel.WARN, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
-                        const pendingPromises = Array.from(this.datasource.timedOutTickers.values()).map(p => p.promise);
+                    //NOTE: Also, this if statement should also contain logic to verify that all of the tickers fetched are not also timed out. If that is the case, we should do something like return Promise.all(this.timedoutTickerPromises)
+                    if (!(this.processables.length > 0)) {
+                        //TODO: This logic should be moved to _fetchTickerInfo
+                        //NOTE: This is some edgecase code
+                        const keys = Array.from([...this.datasource.timedOutTickers.keys()]);
+                        if (this.processables.some((ticker: BaseStockEvent) => !keys.includes(ticker.ticker))) {
+                            this.logger.log(LogLevel.WARN, `The fetched tickers are all timed out. Waiting for all of the timed out tickers to resolve.`);
+                            const pendingPromises = Array.from(this.datasource.timedOutTickers.values()).map(p => p.promise);
 
-                        return Promise.all(pendingPromises)
-                        .then(() => this.preProcess());
+                            return Promise.all(pendingPromises)
+                                .then(() => this.preProcess());
+                        } else {
+                            this.logger.log(LogLevel.TRACE, `this.processables.length = 0, return the backoff promise`);
+                            return BPromise.delay(5000).then(() => this.preProcess())
+                        }
                     } else {
-                        this.logger.log(LogLevel.TRACE, `this.processables.length = 0, return the backoff promise`);
-                        return BPromise.delay(5000).then(() => this.preProcess())
+                        this.logger.log(LogLevel.TRACE, `Nothing in this.processables, instead retrying this.preProcess()`);
+                        return this.preProcess();
                     }
-                } else {
-                    this.logger.log(LogLevel.TRACE, `Nothing in this.processables, instead retrying this.preProcess()`);
-                    return this.preProcess();
-                }
-            })
-            .catch(err => {
-                this.logger.log(LogLevel.ERROR, `this.preProcess():ERROR -> ${err}`);
-                throw err;
-            });
+                });
         }
     }
 
@@ -242,11 +239,11 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
 
     exceptionHandler = (err: Error): void => {
-        console.log(err, JSON.stringify(err))
-        if(err.name === exception.UnprocessableTicker.name) {
+        // console.log(err, JSON.stringify(err))
+        if(err.name == exception.UnprocessableTicker.name) {
             this.logger.log(LogLevel.WARN, `Missing properties, timing out ${err.message}`)
             this.datasource.timeoutTicker(err.message); //Here, with that particular error, the message will be the TICKER
-        } else if (err.name === exception.ServiceClosed.name) {
+        } else if (err.name == exception.ServiceClosed.name) {
             //Do nothing
             this.logger.log(LogLevel.WARN, `${this.constructor.name}#exceptionHandler - Received ServiceClosed error from Worker Process.`);
         } else {
@@ -272,8 +269,11 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     }
     
     close(): Promise<void> {
-        return super.close()
-        .then(() => Promise.all([this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close(), this.commandClient.close()]))
-        .then(() => { });
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():INVOKED`)
+        return Promise.all( [this.datasource.close(), this.diagnostic.close(), this.exchange.close(), this.notification.close(), this.metric.close(), this.commandClient.close() ])
+        .then(() => super.close())
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
+        });
     }
 }

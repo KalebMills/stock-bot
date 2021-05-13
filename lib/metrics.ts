@@ -323,7 +323,11 @@ export class PrometheusMetricService {
     }
 
     close(): Promise<void> {
-        return this._stopServer();
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():INVOKED`);
+        return this._stopServer()
+        .then(() => {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
+        });
     }
 }
 
