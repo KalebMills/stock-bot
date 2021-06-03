@@ -106,14 +106,18 @@ export class DiscordClient extends EventEmitter implements CommandClient {
     }
 
     initialize(): Promise<void> {
-        this._client = new discord.Client();
+        if (!this._client) {
+            this._client = new discord.Client();
 
-        return this._client.login(this.token)
-        .then(() => {
-            this._client.on('message', this._handleIncomingMessage);
+            return this._client.login(this.token)
+            .then(() => {
+                this._client.on('message', this._handleIncomingMessage);
 
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
-        });
+                this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
+            });
+        } else {
+            return Promise.resolve();
+        }
     }
 
     registerCommandHandler(options: CommandContainer): void {
