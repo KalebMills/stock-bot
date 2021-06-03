@@ -46,7 +46,8 @@ export interface IService<IWorker> extends IInitializable, ICloseable {
     exceptionHandler(err: Error): void;
     logger: Logger;
     workers: Map<string, IWorker>;
-    isServiceClosed(): boolean;
+    isClosed(): boolean;
+    isRunning(): boolean;
 }
 
 export interface IServiceOptions<T = any> {
@@ -93,35 +94,41 @@ export class StockServiceManager implements ServiceManager {
         this.logger = options.logger;
         this.isMarketTime = false;
 
-        setTimeout(() => {
-            this.isMarketTime = true;
-        }, 30000);
+        //NOTE: For testing and changing the values
+        // setInterval(() => {
+        //     console.log(`Setting isMarketTime to ${!this.isMarketTime}`)
+        //     this.isMarketTime = !this.isMarketTime;
+        // }, 15000);
     }
 
     monitorService(service: IService<IWorker<any>>): void {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#monitorService():INVOKED || ${service.constructor.name} is currently in ${this.isMarketTime ? 'Running' : 'Stopped'} stated`);
 
-        setTimeout(() => {
-            // isMarketTime().then(isMarketTime => {
-            BPromise.try(() => {
-                if (this.isMarketTime) {
-                    if (service.isServiceClosed()) {
-                        service.initialize()
-                        .catch(service.exceptionHandler);
+        isMarketTime()
+        .then(isMarketTime => {
+            this.isMarketTime = isMarketTime;
+
+            return BPromise.delay(15000)
+                .then(() => BPromise.try(() => {
+                    if (this.isMarketTime) {
+                        if (service.isClosed() || !service.isRunning()) {
+                            return service.initialize()
+                                .then(() => this.logger.log(LogLevel.INFO, `${this.constructor.name} has started ${service.constructor.name}`))
+                                .catch(service.exceptionHandler);
+                        }
+                    } else {
+                        if (!service.isClosed() && service.isRunning()) {
+                            return service.close()
+                                .catch(service.exceptionHandler);
+                        }
                     }
-                } else {
-                    if (!service.isServiceClosed()) {
-                        service.close()
-                        .catch(service.exceptionHandler);
-                    }
-                }
-            }).catch(err => {
-                console.error(`${this.constructor.name}#monitorService():ERROR`, inspect(err));
-            })
-            .finally(() => this.monitorService(service))
-        }, 10000); //Run every 10 seconds
+                })).catch(err => {
+                    console.error(`${this.constructor.name}#monitorService():ERROR`, inspect(err));
+                })
+                .finally(() => this.monitorService(service))
+        });
     }
 }
-
 
 /*
     We have two options here:
@@ -138,7 +145,8 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
     concurrency: number;
     workerOptions: IWorkerOptions<POutput>;
     logger: Logger;
-    isClosed: boolean;
+    _isClosed: boolean;
+    _isRunning: boolean;
     metric: IMetricProvider;
     constructor(options: IServiceOptions) {
         this.concurrency = options.concurrency;
@@ -147,11 +155,15 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
         //@ts-ignore
         this.workerOptions = options.workerOptions; //TODO: fix this type error; makeWorkerOptions should have it's own interface
         this.logger = options.logger;
-        this.isClosed = false;
+        this._isClosed = false;
+        this._isRunning = false;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#constructor():INVOKED`);
     }
 
     initialize(): Promise<void> {
+        this._isClosed = false;
+        this._isRunning = false;
+
         return BPromise.try(() => {
             for ( let i = 1; i <= this.concurrency; i++ ) {
                 const workerId: string = uuid.v4().substr(0, 8);
@@ -167,7 +179,9 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
             }
         })
         .then(() => this.logger.log(LogLevel.TRACE, `Started all workers for ${this.constructor.name}#initialize():SUCCESS`))
-        .then(() => {})
+        .then(() => {
+            this._isRunning = true;    
+        })
     }
 
     abstract preProcess(): Promise<POutput>;
@@ -176,12 +190,17 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
 
     abstract exceptionHandler(err: Error): void;
 
-    isServiceClosed(): boolean {
-        return this.isClosed;
+    isClosed(): boolean {
+        return this._isClosed;
     }
 
+    isRunning(): boolean {
+        return this._isRunning;
+    }
+
+
     close(): Promise<void> {
-        this.isClosed = true;
+        this._isClosed = true;
 
         let pendingWork: Promise<any>[] = [];
 
@@ -197,7 +216,9 @@ export abstract class Service<PInput, POutput> implements IService<IWorker<PInpu
 
         return Promise.all(pendingWork)
         .then(() => this.logger.log(LogLevel.INFO, `${this.constructor.name}#shutdown():SUCCESS`))
-        .then(() => {})
+        .then(() => {
+            this._isRunning = false;
+        })
         .catch((err: DefaultError) => {
             if (err.name != ServiceClosed.name) {
                 this.logger.log(LogLevel.ERROR, `${this.constructor.name}#shutdown():ERROR - ${err}`);
@@ -235,6 +256,7 @@ export abstract class Worker<TInput> implements IWorker<TInput> {
 
     start(): void {
         this.isRunning = true;
+        this.isClosed = false;
         this.logger.log(LogLevel.TRACE, `Worker ${this.id}#start():SUCCESS`);
         this.run();
     }

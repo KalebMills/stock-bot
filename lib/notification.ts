@@ -199,11 +199,12 @@ export class DiscordClient extends EventEmitter implements CommandClient {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():INVOKED`);
         return new Promise((resolve, reject) => {
             try {
-                this._client.destroy();
+                this._client && this._client.destroy();
                 this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
-                return resolve();
+                resolve();
             } catch (e) {
-                return reject(e);
+                //no-op if the client is not constructed
+                resolve();
             }
         });
     }
@@ -318,7 +319,7 @@ export class DiscordNotification implements INotification {
 
     close(): Promise<void> {
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
-        return Promise.resolve();
+        return this.client.close();
     }
 }
 

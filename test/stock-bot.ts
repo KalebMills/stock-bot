@@ -84,7 +84,7 @@ let worker: TopGainerNotificationStockWorker;
 describe('#StockService', () => {
     it('Can create a StockService instance', () => {
         service = new StockService(serviceOptions);
-        service.isClosed = true; //Blocks preProcess from recursively running
+        service._isClosed = true; //Blocks preProcess from recursively running
         assert.strictEqual(service instanceof StockService, true, 'service is not StockService');
     });
 
@@ -113,7 +113,7 @@ describe('#StockService', () => {
             })
         }
 
-        service.isClosed = false;
+        service._isClosed = false;
         service.logger.log(LogLevel.INFO, `service.process() called below me`)
         return service.fetchWork() //Fill this.processables
         .then(() => service.preProcess()) //Make sure the work passes through the filter logic
@@ -129,7 +129,7 @@ describe('#StockService', () => {
             });
         })
         .then(() => {
-            service.isClosed = false;
+            service._isClosed = false;
         })
         .then(() => service.preProcess())
         .then(work => {

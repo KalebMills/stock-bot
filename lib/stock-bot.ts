@@ -94,7 +94,6 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
     notification: INotification;
     commandClient: CommandClient;
     accountPercent: number;
-    // runOnlyInMarketTime: boolean;
 
     constructor(options: IStockServiceOptions) {
         super(options);
@@ -108,18 +107,10 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
         this.mainWorker = options.mainWorker;
         this.commandClient = options.commandClient;
         this.accountPercent = options.accountPercent;
-        // this.runOnlyInMarketTime = options.runOnlyInMarketTime;
-
-        // if (this.runOnlyInMarketTime) {
-        //     setTimeout(() => {
-        //         this.handleMarketTimeProcessing()
-        //         .catch(this.exceptionHandler)
-        //     }, 60000); //Check every minute
-        // }
     }
 
     initialize(): Promise<void> {
-        this.isClosed = false;
+        // this._isClosed = false;
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():INVOKED`);
         return Promise.all([ this.exchange.initialize(), this.notification.initialize(), this.datasource.initialize(), this.diagnostic.initialize(), this.metric.initialize(), this.commandClient.initialize() ])
         .then(() => super.initialize())
@@ -137,17 +128,6 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             return promiseRetry(() => this.fetchWork());
         });
     }
-
-    // handleMarketTimeProcessing = (): Promise<void> => {
-    //     this.logger.log(LogLevel.INFO, `Checking if it is market time..`);
-    //     return isMarketTime()
-    //     .then((isMarketTime: boolean) => {
-    //         for (let worker of this.workers.values()) {
-    //             //NOTE: start() and stop() are idempotent
-    //             isMarketTime ? worker.start() : worker.close();
-    //         }
-    //     })
-    // }
 
     /*
         All this function does is verify that the processable work array has data in it.. this is later on called by the Worker class before process
@@ -167,7 +147,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
             }
         });
 
-        if (this.isClosed) {
+        if (this.isClosed()) {
             return Promise.reject(new exception.ServiceClosed());
         }
 
@@ -256,7 +236,7 @@ export class StockService extends Service<BaseStockEvent, BaseStockEvent> {
                 }
             })
 
-            this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}`);
+            this.logger.log(LogLevel.ERROR, `Caught error in ${this.constructor.name}.exceptionHandler -> Error: ${err}::${err.stack}`);
             this.diagnostic.alert({
                 level: LogLevel.ERROR,
                 title: 'Service Error',

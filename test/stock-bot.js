@@ -96,7 +96,7 @@ let worker;
 describe('#StockService', () => {
     it('Can create a StockService instance', () => {
         service = new stock_bot_1.StockService(serviceOptions);
-        service.isClosed = true; //Blocks preProcess from recursively running
+        service._isClosed = true; //Blocks preProcess from recursively running
         assert.strictEqual(service instanceof stock_bot_1.StockService, true, 'service is not StockService');
     });
     //Need to find a better way to test this
@@ -120,7 +120,7 @@ describe('#StockService', () => {
                 return data;
             });
         };
-        service.isClosed = false;
+        service._isClosed = false;
         service.logger.log(base_1.LogLevel.INFO, `service.process() called below me`);
         return service.fetchWork() //Fill this.processables
             .then(() => service.preProcess()) //Make sure the work passes through the filter logic
@@ -136,7 +136,7 @@ describe('#StockService', () => {
             });
         })
             .then(() => {
-            service.isClosed = false;
+            service._isClosed = false;
         })
             .then(() => service.preProcess())
             .then(work => {

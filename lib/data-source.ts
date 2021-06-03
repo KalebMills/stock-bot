@@ -8,7 +8,7 @@ import color from 'chalk';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PolygonGainersLosersSnapshot } from '../types/polygonSnapshot'
-import { InvalidConfigurationError, InvalidDataError, UnprocessableEvent, UnrecoverableWorkerError } from './exceptions'
+import { InvalidConfigurationError, InvalidDataError, ServiceClosed, UnprocessableEvent, UnrecoverableWorkerError } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
@@ -531,10 +531,10 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     }
 
     initialize(): Promise<void> {
-
         this.isClosed = false;
         if (!this.isMock) {
-            this._scrapeProcess = this.startProcessing();
+            this._scrapeProcess = this.startProcessing()
+            .catch(err => this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing:ERROR -- ${inspect(err)}`));
         }
 
         return Promise.resolve();
@@ -553,6 +553,11 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing():ONTO_RECURSION`);
 
         return BPromise.delay(this._scrapeProcessDelay)
+        .then(() => {
+            if (this.isClosed) {
+                return Promise.reject(new ServiceClosed());
+            }    
+        })
         .then(() => this.publishLatestTweets())
         .catch(err => {
             this.logger.log(LogLevel.ERROR, `Error occurred when scraping Twitter: ${inspect(err)}`);

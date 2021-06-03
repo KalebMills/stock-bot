@@ -129,7 +129,12 @@ const datasource = new TwitterDataSource({
         id: '1350915232227594240',
         name: 'CoiledSpringPro',
         type: TwitterAccountType.WATCHLIST
-    }],
+    } /*, {
+        id: '1338306457511600130',
+        name: 'notmrmanziel',
+        type: TwitterAccountType.WATCHLIST
+    }*/
+    ],
     twitterKey: (process.env['TWITTER_API_KEY']),
     twitterSecret: (process.env['TWITTER_API_SECRET']),
     twitterAccessSecret: (process.env['TWITTER_ACCESS_SECRET']),

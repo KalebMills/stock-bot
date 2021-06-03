@@ -18,19 +18,11 @@ if (error) {
     console.error(color.red(`An error occurred when loading StockService configuration: ${error}`))
 } else {
     const service = new StockService(config);
-    service.initialize()
-    .then(() => console.log(color.green('StockService#initialize():SUCCESS')))
-    .catch(err => {
-        console.log(color.red(`An unhandled error occurred, ${err}`));
-        return service.close();
+    let serviceManager = new StockServiceManager({
+        logger: createLogger({})
     });
 
-    //TODO: Make the market time hook here, this way it can easily be controlled by starting and stopping the entire service. No need for the internals of the service to handle this.
-    // let serviceManager = new StockServiceManager({
-    //     logger: createLogger({})
-    // });
-
-    // serviceManager.monitorService(service);
+    serviceManager.monitorService(service);
 }
 
 //Catches unhandled Promise errors
