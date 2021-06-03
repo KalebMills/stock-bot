@@ -106,14 +106,18 @@ export class DiscordClient extends EventEmitter implements CommandClient {
     }
 
     initialize(): Promise<void> {
-        this._client = new discord.Client();
+        if (!this._client) {
+            this._client = new discord.Client();
 
-        return this._client.login(this.token)
-        .then(() => {
-            this._client.on('message', this._handleIncomingMessage);
+            return this._client.login(this.token)
+            .then(() => {
+                this._client.on('message', this._handleIncomingMessage);
 
-            this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
-        });
+                this.logger.log(LogLevel.INFO, `${this.constructor.name}#initialize():SUCCESS`);
+            });
+        } else {
+            return Promise.resolve();
+        }
     }
 
     registerCommandHandler(options: CommandContainer): void {
@@ -196,12 +200,15 @@ export class DiscordClient extends EventEmitter implements CommandClient {
     }
 
     close(): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():INVOKED`);
         return new Promise((resolve, reject) => {
             try {
-                this._client.destroy()
-                return resolve();
+                this._client && this._client.destroy();
+                this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
+                resolve();
             } catch (e) {
-                return reject(e);
+                //no-op if the client is not constructed
+                resolve();
             }
         });
     }
@@ -315,7 +322,8 @@ export class DiscordNotification implements INotification {
     }
 
     close(): Promise<void> {
-        return Promise.resolve();
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
+        return this.client.close();
     }
 }
 

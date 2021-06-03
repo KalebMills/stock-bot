@@ -184,4 +184,8 @@ describe('#TwitterDataSource', () => {
 
         chai.expect(twitterDataSource['prevIds']).deep.equal(["TEST", input1[0].tweets[0].id, input1[1].tweets[0].id]);
     });
+
+    it('Can close, and stop recursion properly', () => {
+        
+    });
 });

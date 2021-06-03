@@ -8,7 +8,7 @@ import color from 'chalk';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PolygonGainersLosersSnapshot } from '../types/polygonSnapshot'
-import { InvalidConfigurationError, InvalidDataError, UnprocessableEvent, UnrecoverableWorkerError } from './exceptions'
+import { InvalidConfigurationError, InvalidDataError, ServiceClosed, UnprocessableEvent, UnrecoverableWorkerError } from './exceptions'
 import { URL } from 'url'
 import * as p from 'path';
 import { TradeEvent } from './workers';
@@ -491,6 +491,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     private _scrapeProcess: Promise<any>; 
     private _scrapeProcessDelay: number; //Milliseconds
     private prevIds: string[];
+    private isClosed: boolean;
 
 
     constructor (options: TwitterDataSourceOptions) {
@@ -512,6 +513,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
         this.twitterAccessSecret = options.twitterAccessSecret;
         this.twitterAccessToken = options.twitterAccessToken;
         this.work = [];
+        this.isClosed = false;
+
 
         this.commandClient.registerCommandHandler({
             command: 'redrive',
@@ -528,20 +531,37 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     }
 
     initialize(): Promise<void> {
+        this.isClosed = false;
         if (!this.isMock) {
-            this.startProcessing();
+            this._scrapeProcess = this.startProcessing()
+            .catch(err => this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing:ERROR -- ${inspect(err)}`));
         }
 
         return Promise.resolve();
     }
 
     startProcessing = (): Promise<void> => {
-        this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing():INVOKED`);
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing():BEGINNING`);
+
+        if (this.isClosed) {
+            this.logger.log(LogLevel.INFO, `${this.constructor.name}#isClosed:TRUE - Ending Recursive Loop`);
+            //@ts-ignore
+            delete this._scrapeProcess;
+            return Promise.resolve(); //Breaks out of the recursive loop
+        }
+
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#startProcessing():ONTO_RECURSION`);
 
         return BPromise.delay(this._scrapeProcessDelay)
+        .then(() => {
+            if (this.isClosed) {
+                return Promise.reject(new ServiceClosed());
+            }    
+        })
         .then(() => this.publishLatestTweets())
         .catch(err => {
-            this.logger.log(LogLevel.ERROR, `Error occurred when scraping Twitter: ${inspect(err)}`)
+            this.logger.log(LogLevel.ERROR, `Error occurred when scraping Twitter: ${inspect(err)}`);
+            throw err;
         })
         .finally(() => {
             this._scrapeProcess = this.startProcessing();
@@ -590,7 +610,7 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
             });
         } else {
             input.forEach(account => {
-                this.logger.log(LogLevel.INFO, inspect(account));
+                this.logger.log(LogLevel.INFO, `input.forEach( ... ) LOG(${inspect(account)})`);
                 this.prevIds.push(account.tweets[0].id);
                 latestTweets.push({ accountId: account.accountId, tweets: [ account.tweets[0] ] });
             })
@@ -716,6 +736,8 @@ export class TwitterDataSource extends DataSource<SocialMediaOutput> implements 
     }
 
     close(): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}#close():SUCCESS`);
+        this.isClosed = true;
         return Promise.resolve();
     }
 }

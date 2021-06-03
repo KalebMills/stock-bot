@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { TwitterDataSource, TwitterAccountType } = require('../lib/data-source');
+const { TwitterDataSource, TwitterAccountType, PhonyDataSource } = require('../lib/data-source');
 const { RedisDataStore, MemoryDataStore } = require('../lib/data-store');
 const path = require('path');
 const winston = require('winston');
@@ -82,7 +82,7 @@ const prometheus_registry = new PrometheusMetricRegistry({
 
 const prometheus_metric_provider = new PrometheusMetricProvider({
     logger,
-    port: 9091,
+    port: 9095,
     registry: prometheus_registry
 });
 
@@ -110,6 +110,10 @@ const DISCORD_CLIENT = new DiscordClient({
     commandPrefix: '!'
 });
 
+// const datasource = new PhonyDataSource({
+//     logger
+// });
+
 const datasource = new TwitterDataSource({
     logger,
     tickerList: t,
@@ -125,21 +129,12 @@ const datasource = new TwitterDataSource({
         name: 'CSCproALERT',
         type: TwitterAccountType.SWING_POSITION
 
-    }, {
-        id: '1350915232227594240',
-        name: 'CoiledSpringPro',
-        type: TwitterAccountType.WATCHLIST
-    } /*, {
-        id: '1338306457511600130',
-        name: 'notmrmanziel',
-        type: TwitterAccountType.WATCHLIST
-    }*/
-    ],
+    }],
     twitterKey: (process.env['TWITTER_API_KEY']),
     twitterSecret: (process.env['TWITTER_API_SECRET']),
     twitterAccessSecret: (process.env['TWITTER_ACCESS_SECRET']),
     twitterAccessToken: (process.env['TWITTER_ACCESS_TOKEN']),
-    scrapeProcessDelay: 60000 // 1 minute
+    scrapeProcessDelay: 15000 //15 seconds
 });
 
 // const datastore = new RedisDataStore({
@@ -150,52 +145,52 @@ const datasource = new TwitterDataSource({
 
 const datastore = new MemoryDataStore({ logger, metric: prometheus_metric_provider });
 
-const diagnostic = new DiscordDiagnosticSystem({
-    logger,
-    token: (process.env['DISCORD_API_TOKEN'] || ""),
-    guildId: (process.env['DISCORD_GUILD_ID'] || ""),
-    channelName: 'service-diagnostics',
-    client: DISCORD_CLIENT
-});
-
-// const diagnostic = new PhonyDiagnostic({
-
-// });
-
-
-// const exchange = new PhonyExchange({
+// const diagnostic = new DiscordDiagnosticSystem({
 //     logger,
+//     token: (process.env['DISCORD_API_TOKEN'] || ""),
+//     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
+//     channelName: 'service-diagnostics',
+//     client: DISCORD_CLIENT
 // });
 
-const exchange = new AlpacasExchange({
-    acceptableGain: {
-        type: 'percent',
-        unit: 1
-    },
-    acceptableLoss: {
-        type: 'percent',
-        unit: 1
-    },
-    logger,
-    keyId: process.env['ALPACAS_API_KEY'],
-    secretKey: process.env['ALPACAS_SECRET_KEY'],
-    commandClient: DISCORD_CLIENT
-})
+const diagnostic = new PhonyDiagnostic({
 
-// const notification = new PhonyNotification({
-//     logger
-// });
-
-const notification = new DiscordNotification({
-    guildId: (process.env['DISCORD_GUILD_ID'] || ""),
-    logger,
-    token: (process.env['DISCORD_API_KEY'] || ""),
-    channels: {
-        "notificationChannel": "stock-notifications",
-        "socialMediaChannel": "watchlist", //TODO: This is bad, should be generic and the caller should be able to specify any channel
-    },
-    client: DISCORD_CLIENT
 });
+
+
+const exchange = new PhonyExchange({
+    logger,
+});
+
+// const exchange = new AlpacasExchange({
+//     acceptableGain: {
+//         type: 'percent',
+//         unit: 1
+//     },
+//     acceptableLoss: {
+//         type: 'percent',
+//         unit: 1
+//     },
+//     logger,
+//     keyId: process.env['ALPACAS_API_KEY'],
+//     secretKey: process.env['ALPACAS_SECRET_KEY'],
+//     commandClient: DISCORD_CLIENT
+// })
+
+const notification = new PhonyNotification({
+    logger
+});
+
+// const notification = new DiscordNotification({
+//     guildId: (process.env['DISCORD_GUILD_ID'] || ""),
+//     logger,
+//     token: (process.env['DISCORD_API_KEY'] || ""),
+//     channels: {
+//         "notificationChannel": "stock-notifications",
+//         "socialMediaChannel": "watchlist", //TODO: This is bad, should be generic and the caller should be able to specify any channel
+//     },
+//     client: DISCORD_CLIENT
+// });
 
 const serviceOptions = {
     concurrency: 1, //Should only have 1 thread here, since we want only 1 twitter connection and dont want to double process tweets

@@ -92,6 +92,7 @@ export class DiscordDiagnosticSystem implements IDiagnostic {
 
 
     close(): Promise<void> {
+        this.logger.log(LogLevel.INFO, `${this.constructor.name}:close():SUCCESS`);
         return Promise.resolve();
     }
 }
